@@ -1,57 +1,31 @@
-import * as BitcoinJS from 'bitcoinjs-lib';
+import {
+    Block,
+    Network,
+    Transaction,
+    TxInput,
+    TxOutput,
+    address,
+    networks,
+    payments,
+    script,
+} from 'bitcoinjs-lib';
 
-import { ElectrumWS, bytesToHex, hexToBytes } from '../electrum-ws/index';
+import {
+    ElectrumWS,
+    DEFAULT_ENDPOINT,
+    DEFAULT_TOKEN,
+    bytesToHex,
+    hexToBytes,
+} from '../electrum-ws/index';
 
-export type Balance = {
-    confirmed: number,
-    unconfirmed: number,
-}
-
-export type Receipt = {
-    blockHeight: number,
-    transactionHash: string
-}
-
-export type PlainInput = {
-    script: Uint8Array,
-    transactionHash: string,
-    address: string | null,
-    witness: Array<number | Uint8Array>,
-    index: number,
-    outputIndex: number,
-}
-
-export type PlainOutput = {
-    script: Uint8Array,
-    address: string,
-    value: number,
-    index: number,
-}
-
-export type PlainTransaction = {
-    transactionHash: string,
-    inputs: PlainInput[],
-    outputs: PlainOutput[],
-    version: number,
-    vsize: number,
-    isCoinbase: boolean,
-    weight: number,
-    blockHash: string | null,
-    blockHeight: number | null,
-    timestamp: number | null,
-}
-
-export type PlainBlockHeader = {
-    blockHash: string,
-    blockHeight: number,
-    timestamp: number,
-    bits: number,
-    nonce: number,
-    version: number,
-    weight: number,
-    prevHash: string | null,
-    merkleRoot: string | null,
-}
+import {
+    Balance,
+    PlainBlockHeader,
+    PlainInput,
+    PlainOutput,
+    PlainTransaction,
+    Receipt,
+} from './types';
 
 export async function scriptPubKeyToScriptHash(scriptPubKey: string | Uint8Array) {
     if (typeof scriptPubKey === 'string') {
@@ -69,19 +43,40 @@ export async function scriptPubKeyToScriptHash(scriptPubKey: string | Uint8Array
     return bytesToHex(reversed);
 }
 
+export type Options = {
+    endpoint: string,
+    proxy: boolean,
+    token: string,
+    network: Network,
+}
+
 export class ElectrumApi {
-    public static network = BitcoinJS.networks.testnet;
+    private options: Options;
+    private socket: ElectrumWS;
 
-    public static socket = new ElectrumWS(undefined, {
-        proxy: true,
-        token: 'testnet',
-    });
+    constructor(options: Partial<Omit<Options, 'network'> & { network: 'bitcoin' | 'testnet' | 'regtest' | Network }> = {}) {
+        if (typeof options.network === 'string') {
+            options.network = networks[options.network];
+        }
 
-    public static async getBalance(script: string | Uint8Array): Promise<Balance> {
+        this.options = Object.assign({
+            endpoint: DEFAULT_ENDPOINT,
+            proxy: false,
+            token: DEFAULT_TOKEN,
+            network: networks.testnet,
+        }, options);
+
+        this.socket = new ElectrumWS(this.options.endpoint, {
+            proxy: this.options.proxy,
+            token: this.options.token,
+        });
+    }
+
+    public async getBalance(script: string | Uint8Array): Promise<Balance> {
         return this.socket.request('blockchain.scripthash.get_balance', await scriptPubKeyToScriptHash(script));
     }
 
-    public static async getReceipts(script: string | Uint8Array, isScriptHash = false): Promise<Receipt[]> {
+    public async getReceipts(script: string | Uint8Array, isScriptHash = false): Promise<Receipt[]> {
         const receipts: Array<{height: number, tx_hash: string}> =
             await this.socket.request('blockchain.scripthash.get_history', isScriptHash ? script : await scriptPubKeyToScriptHash(script));
 
@@ -91,7 +86,7 @@ export class ElectrumApi {
         }));
     }
 
-    public static async getHistory(script: string | Uint8Array) {
+    public async getHistory(script: string | Uint8Array) {
         const history = await this.getReceipts(script);
 
         // TODO: Skip known receipts
@@ -140,10 +135,10 @@ export class ElectrumApi {
         return txs;
     }
 
-    public static async getBlockHeader(height: number): Promise<PlainBlockHeader> {
+    public async getBlockHeader(height: number): Promise<PlainBlockHeader> {
         const raw: string = await this.socket.request('blockchain.block.header', height);
 
-        const block = BitcoinJS.Block.fromHex(raw);
+        const block = Block.fromHex(raw);
 
         return {
             blockHash: block.getId(),
@@ -158,7 +153,7 @@ export class ElectrumApi {
         };
     }
 
-    public static async getTransaction(hash: string, height?: number): Promise<PlainTransaction> {
+    public async getTransaction(hash: string, height?: number): Promise<PlainTransaction> {
         const raw: string = await this.socket.request('blockchain.transaction.get', hash);
 
         let blockHeader;
@@ -173,7 +168,7 @@ export class ElectrumApi {
         return this.transactionToPlain(raw, blockHeader);
     }
 
-    static async subscribeStatus(script: string | Uint8Array, callback: (receipts: Receipt[]) => any) {
+    async subscribeStatus(script: string | Uint8Array, callback: (receipts: Receipt[]) => any) {
         this.socket.subscribe(
             'blockchain.scripthash',
             async (scriptHash: string, status: string) => {
@@ -183,26 +178,26 @@ export class ElectrumApi {
         );
     }
 
-    static async subscribeHeaders(callback: (header: PlainBlockHeader) => any) {
+    async subscribeHeaders(callback: (header: PlainBlockHeader) => any) {
         this.socket.subscribe('blockchain.headers', async (headerInfo) => {
             callback(await this.getBlockHeader(headerInfo.height));
         });
     }
 
-    static async broadcastTransaction(rawTx: string): Promise<PlainTransaction> {
+    async broadcastTransaction(rawTx: string): Promise<PlainTransaction> {
         const tx = this.transactionToPlain(rawTx);
         const hash = await this.socket.request('blockchain.transaction.broadcast', rawTx);
         if (hash === tx.transactionHash) return tx;
         else throw new Error(hash); // Protocol v1.0 returns errors as the result string
     }
 
-    static transactionToPlain(tx: string | BitcoinJS.Transaction, plainHeader?: PlainBlockHeader): PlainTransaction {
-        if (typeof tx === 'string') tx = BitcoinJS.Transaction.fromHex(tx);
+    transactionToPlain(tx: string | Transaction, plainHeader?: PlainBlockHeader): PlainTransaction {
+        if (typeof tx === 'string') tx = Transaction.fromHex(tx);
 
         const plain: PlainTransaction = {
             transactionHash: tx.getId(),
-            inputs: tx.ins.map((input: BitcoinJS.TxInput, index: number) => this.inputToPlain(input, index)),
-            outputs: tx.outs.map((output: BitcoinJS.TxOutput, index: number) => this.outputToPlain(output, index)),
+            inputs: tx.ins.map((input: TxInput, index: number) => this.inputToPlain(input, index)),
+            outputs: tx.outs.map((output: TxOutput, index: number) => this.outputToPlain(output, index)),
             version: tx.version,
             vsize: tx.virtualSize(),
             isCoinbase: tx.isCoinbase(),
@@ -221,7 +216,7 @@ export class ElectrumApi {
         return plain;
     }
 
-    static inputToPlain(input: BitcoinJS.TxInput, index: number): PlainInput {
+    inputToPlain(input: TxInput, index: number): PlainInput {
         return {
             script: input.script,
             transactionHash: bytesToHex(input.hash.reverse()),
@@ -232,35 +227,35 @@ export class ElectrumApi {
         };
     }
 
-    static outputToPlain(output: BitcoinJS.TxOutput, index: number): PlainOutput {
+    outputToPlain(output: TxOutput, index: number): PlainOutput {
         return {
             script: output.script,
-            address: BitcoinJS.address.fromOutputScript(output.script, this.network),
+            address: address.fromOutputScript(output.script, this.options.network),
             value: output.value,
             index,
         };
     }
 
-    static deriveAddressFromInput(input: BitcoinJS.TxInput): string | undefined {
-        const chunks = (BitcoinJS.script.decompile(input.script) || []) as Buffer[];
+    deriveAddressFromInput(input: TxInput): string | undefined {
+        const chunks = (script.decompile(input.script) || []) as Buffer[];
         const witness = input.witness;
 
         // Legacy addresses P2PKH (1...)
         // a4453c9e224a0927f2909e49e3a97b31b5aa74a42d99de8cfcdaf293cb2ecbb7 0,1
         if (chunks.length === 2 && witness.length === 0) {
-            return BitcoinJS.payments.p2pkh({
+            return payments.p2pkh({
                 pubkey: chunks[1],
-                network: this.network,
+                network: this.options.network,
             }).address;
         }
 
         // Nested SegWit P2SH(P2WPKH) (3...)
         // 6f4e12fa9e869c8721f2d747e042ff80f51c6757277df1563b54d4e9c9454ba0 0,1,2
         if (chunks.length === 1	&& witness.length === 2) {
-            return BitcoinJS.payments.p2sh({
-                redeem: BitcoinJS.payments.p2wpkh({
+            return payments.p2sh({
+                redeem: payments.p2wpkh({
                     pubkey: witness[1],
-                    network: this.network,
+                    network: this.options.network,
                 }),
             }).address;
         }
@@ -268,9 +263,9 @@ export class ElectrumApi {
         // Native SegWit P2WPKH (bc1...)
         // 3c89e220db701fed2813e0af033610044bc508d2de50cb4c420b8f3ad2d72c5c 0
         if (chunks.length === 0 && witness.length === 2) {
-            return BitcoinJS.payments.p2wpkh({
+            return payments.p2wpkh({
                 pubkey: witness[1],
-                network: this.network,
+                network: this.options.network,
             }).address;
         }
 
@@ -278,14 +273,14 @@ export class ElectrumApi {
         // 80975cddebaa93aa21a6477c0d050685d6820fa1068a2731db0f39b535cbd369 0,1,2
         if (chunks.length > 2 && witness.length === 0) {
             const m = chunks.length - 2; // Number of signatures
-            const pubkeys = BitcoinJS.script.decompile(chunks[chunks.length - 1])!
+            const pubkeys = script.decompile(chunks[chunks.length - 1])!
                 .filter((n: number | Buffer) => typeof n !== 'number') as Buffer[];
 
-            return BitcoinJS.payments.p2sh({
-                redeem: BitcoinJS.payments.p2ms({
+            return payments.p2sh({
+                redeem: payments.p2ms({
                     m,
                     pubkeys,
-                    network: this.network,
+                    network: this.options.network,
                 }),
             }).address;
         }
@@ -294,15 +289,15 @@ export class ElectrumApi {
         // 80975cddebaa93aa21a6477c0d050685d6820fa1068a2731db0f39b535cbd369 3
         if (chunks.length === 1 && witness.length > 2) {
             const m = witness.length - 2; // Number of signatures
-            const pubkeys = BitcoinJS.script.decompile(witness[witness.length - 1])!
+            const pubkeys = script.decompile(witness[witness.length - 1])!
                 .filter((n: number | Uint8Array) => typeof n !== 'number') as Buffer[];
 
-            return BitcoinJS.payments.p2sh({
-                redeem: BitcoinJS.payments.p2wsh({
-                    redeem: BitcoinJS.payments.p2ms({
+            return payments.p2sh({
+                redeem: payments.p2wsh({
+                    redeem: payments.p2ms({
                         m,
                         pubkeys,
-                        network: this.network,
+                        network: this.options.network,
                     }),
                 }),
             }).address;
@@ -312,14 +307,14 @@ export class ElectrumApi {
         // 54a3e33efff4c508fa5c8ce7ccf4b08538a8fd2bf808b97ae51c21cf83df2dd1 0
         if (chunks.length === 0 && witness.length > 2) {
             const m = witness.length - 2; // Number of signatures
-            const pubkeys = BitcoinJS.script.decompile(witness[witness.length - 1])!
+            const pubkeys = script.decompile(witness[witness.length - 1])!
                 .filter((n: number | Uint8Array) => typeof n !== 'number') as Buffer[];
 
-            return BitcoinJS.payments.p2wsh({
-                redeem: BitcoinJS.payments.p2ms({
+            return payments.p2wsh({
+                redeem: payments.p2ms({
                     m,
                     pubkeys,
-                    network: this.network,
+                    network: this.options.network,
                 }),
             }).address;
         }

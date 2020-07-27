@@ -1,12 +1,13 @@
 import { stringToBytes, bytesToString } from "./helpers";
 
-type Options = {
+export type Options = {
     proxy: boolean,
     token?: string,
     // reconnect: true, // Not yet implemented
 }
 
-const ENDPOINT = 'wss://node.nimiq.watch:50002';
+export const DEFAULT_ENDPOINT = 'wss://node.nimiq.watch:50002';
+export const DEFAULT_TOKEN = 'testnet:electrum.blockstream.info';
 
 export class ElectrumWS {
     private options: Options;
@@ -22,10 +23,10 @@ export class ElectrumWS {
 
     public ws: WebSocket;
 
-    constructor(endpoint = ENDPOINT, options: Partial<Options> = {}) {
+    constructor(endpoint = DEFAULT_ENDPOINT, options: Partial<Options> = {}) {
         this.options = Object.assign({
             proxy: false,
-            token: 'testnet',
+            token: DEFAULT_TOKEN,
         }, options);
 
         this.setupConnectedPromise();
