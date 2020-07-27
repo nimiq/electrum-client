@@ -5,7 +5,8 @@ export type Balance = {
 
 export type Receipt = {
     blockHeight: number,
-    transactionHash: string
+    transactionHash: string,
+    fee?: number,
 }
 
 export type PlainInput = {

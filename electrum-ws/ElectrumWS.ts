@@ -6,8 +6,8 @@ type Options = {
     // reconnect: true, // Not yet implemented
 }
 
-export const DEFAULT_ENDPOINT = 'wss://node.nimiq.watch:50002';
-export const DEFAULT_TOKEN = 'testnet:electrum.blockstream.info';
+export const DEFAULT_ENDPOINT = 'wss://api.nimiq.watch:50002';
+export const DEFAULT_TOKEN = 'mainnet:electrum.blockstream.info';
 
 export class ElectrumWS {
     private options: Options;
@@ -25,7 +25,7 @@ export class ElectrumWS {
 
     constructor(endpoint = DEFAULT_ENDPOINT, options: Partial<Options> = {}) {
         this.options = Object.assign({
-            proxy: false,
+            proxy: true,
             token: DEFAULT_TOKEN,
         }, options);
 

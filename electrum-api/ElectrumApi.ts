@@ -12,8 +12,6 @@ import {
 
 import {
     ElectrumWS,
-    DEFAULT_ENDPOINT,
-    DEFAULT_TOKEN,
     bytesToHex,
 } from '../electrum-ws/index';
 
@@ -27,27 +25,22 @@ import {
 } from './types';
 
 export type Options = {
-    endpoint: string,
-    proxy: boolean,
-    token: string,
-    network: Network,
+    endpoint?: string,
+    network?: Network,
+    proxy?: boolean,
+    token?: string,
 }
 
 export class ElectrumApi {
     private options: Options;
     private socket: ElectrumWS;
 
-    constructor(options: Partial<Omit<Options, 'network'> & { network: 'bitcoin' | 'testnet' | 'regtest' | Network }> = {}) {
+    constructor(options: Omit<Options, 'network'> & { network?: 'bitcoin' | 'testnet' | 'regtest' | Network } = {}) {
         if (typeof options.network === 'string') {
             options.network = networks[options.network];
         }
 
-        this.options = Object.assign({
-            endpoint: DEFAULT_ENDPOINT,
-            proxy: false,
-            token: DEFAULT_TOKEN,
-            network: networks.testnet,
-        }, options);
+        this.options = options as Options;
 
         this.socket = new ElectrumWS(this.options.endpoint, {
             proxy: this.options.proxy,
@@ -60,12 +53,13 @@ export class ElectrumApi {
     }
 
     public async getReceipts(address: string, isScriptHash = false): Promise<Receipt[]> {
-        const receipts: Array<{height: number, tx_hash: string}> =
+        const receipts: Array<{height: number, tx_hash: string, fee?: number}> =
             await this.socket.request('blockchain.scripthash.get_history', isScriptHash ? script : await this.addressToScriptHash(address));
 
         return receipts.map((r) => ({
             blockHeight: r.height,
             transactionHash: r.tx_hash,
+            ...(r.fee ? { fee: r.fee } : {}),
         }));
     }
 
@@ -118,6 +112,21 @@ export class ElectrumApi {
         return txs;
     }
 
+    public async getTransaction(hash: string, height?: number): Promise<PlainTransaction> {
+        const raw: string = await this.socket.request('blockchain.transaction.get', hash);
+
+        let blockHeader;
+        if (typeof height === 'number' && height > 0) {
+            try {
+                blockHeader = await this.getBlockHeader(height);
+            } catch (error) {
+                console.error(error);
+            }
+        }
+
+        return this.transactionToPlain(raw, blockHeader);
+    }
+
     public async getBlockHeader(height: number): Promise<PlainBlockHeader> {
         const raw: string = await this.socket.request('blockchain.block.header', height);
 
@@ -136,22 +145,14 @@ export class ElectrumApi {
         };
     }
 
-    public async getTransaction(hash: string, height?: number): Promise<PlainTransaction> {
-        const raw: string = await this.socket.request('blockchain.transaction.get', hash);
-
-        let blockHeader;
-        if (typeof height === 'number' && height > 0) {
-            try {
-                blockHeader = await this.getBlockHeader(height);
-            } catch (error) {
-                console.error(error);
-            }
-        }
-
-        return this.transactionToPlain(raw, blockHeader);
+    async broadcastTransaction(rawTx: string): Promise<PlainTransaction> {
+        const tx = this.transactionToPlain(rawTx);
+        const hash = await this.socket.request('blockchain.transaction.broadcast', rawTx);
+        if (hash === tx.transactionHash) return tx;
+        else throw new Error(hash); // Protocol v1.0 returns errors as the result string
     }
 
-    async subscribeStatus(address: string, callback: (receipts: Receipt[]) => any) {
+    async subscribeReceipts(address: string, callback: (receipts: Receipt[]) => any) {
         this.socket.subscribe(
             'blockchain.scripthash',
             async (scriptHash: string, status: string) => {
@@ -165,13 +166,6 @@ export class ElectrumApi {
         this.socket.subscribe('blockchain.headers', async (headerInfo) => {
             callback(await this.getBlockHeader(headerInfo.height));
         });
-    }
-
-    async broadcastTransaction(rawTx: string): Promise<PlainTransaction> {
-        const tx = this.transactionToPlain(rawTx);
-        const hash = await this.socket.request('blockchain.transaction.broadcast', rawTx);
-        if (hash === tx.transactionHash) return tx;
-        else throw new Error(hash); // Protocol v1.0 returns errors as the result string
     }
 
     transactionToPlain(tx: string | Transaction, plainHeader?: PlainBlockHeader): PlainTransaction {
