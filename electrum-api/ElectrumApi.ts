@@ -8,17 +8,17 @@ export type Balance = {
 }
 
 export type Receipt = {
-    height: number,
-    tx_hash: string
+    blockHeight: number,
+    transactionHash: string
 }
 
 export type PlainInput = {
     script: Uint8Array,
-    txid: string,
-    address: string,
+    transactionHash: string,
+    address: string | null,
     witness: Array<number | Uint8Array>,
     index: number,
-    output_index: number,
+    outputIndex: number,
 }
 
 export type PlainOutput = {
@@ -29,16 +29,16 @@ export type PlainOutput = {
 }
 
 export type PlainTransaction = {
-    txid: string,
+    transactionHash: string,
     inputs: PlainInput[],
     outputs: PlainOutput[],
     version: number,
     vsize: number,
     isCoinbase: boolean,
     weight: number,
-    block_hash: string | null,
-    block_height: number | null,
-    block_time: number | null,
+    blockHash: string | null,
+    blockHeight: number | null,
+    timestamp: number | null,
 }
 
 export type PlainBlockHeader = {
@@ -82,7 +82,13 @@ export class ElectrumApi {
     }
 
     public static async getReceipts(script: string | Uint8Array, isScriptHash = false): Promise<Receipt[]> {
-        return this.socket.request('blockchain.scripthash.get_history', isScriptHash ? script : await scriptPubKeyToScriptHash(script));
+        const receipts: Array<{height: number, tx_hash: string}> =
+            await this.socket.request('blockchain.scripthash.get_history', isScriptHash ? script : await scriptPubKeyToScriptHash(script));
+
+        return receipts.map((r) => ({
+            blockHeight: r.height,
+            transactionHash: r.tx_hash,
+        }));
     }
 
     public static async getHistory(script: string | Uint8Array) {
@@ -91,10 +97,10 @@ export class ElectrumApi {
         // TODO: Skip known receipts
 
         // Sort by height DESC to fetch newest txs first
-        history.sort((a, b) => (b.height || Number.MAX_SAFE_INTEGER) - (a.height || Number.MAX_SAFE_INTEGER));
+        history.sort((a, b) => (b.blockHeight || Number.MAX_SAFE_INTEGER) - (a.blockHeight || Number.MAX_SAFE_INTEGER));
 
         const blockHeights = history.reduce((array, entry) => {
-            const height = entry.height;
+            const height = entry.blockHeight;
             if (height > 0) array.push(height);
             return array;
         }, [] as number[]);
@@ -113,15 +119,15 @@ export class ElectrumApi {
 
         // Fetch transactions
         const txs = [];
-        for (const { tx_hash, height } of history) {
+        for (const { transactionHash, blockHeight } of history) {
             try {
-                const tx = await this.getTransaction(tx_hash);
+                const tx = await this.getTransaction(transactionHash);
 
-                const blockHeader = blockHeaders.get(height);
+                const blockHeader = blockHeaders.get(blockHeight);
                 if (blockHeader) {
-                    tx.block_height = height;
-                    tx.block_time = blockHeader.timestamp;
-                    tx.block_hash = blockHeader.blockHash;
+                    tx.blockHeight = blockHeight;
+                    tx.timestamp = blockHeader.timestamp;
+                    tx.blockHash = blockHeader.blockHash;
                 }
 
                 txs.push(tx);
@@ -186,7 +192,7 @@ export class ElectrumApi {
     static async broadcastTransaction(rawTx: string): Promise<PlainTransaction> {
         const tx = this.transactionToPlain(rawTx);
         const hash = await this.socket.request('blockchain.transaction.broadcast', rawTx);
-        if (hash === tx.txid) return tx;
+        if (hash === tx.transactionHash) return tx;
         else throw new Error(hash); // Protocol v1.0 returns errors as the result string
     }
 
@@ -194,22 +200,22 @@ export class ElectrumApi {
         if (typeof tx === 'string') tx = BitcoinJS.Transaction.fromHex(tx);
 
         const plain: PlainTransaction = {
-            txid: tx.getId(),
+            transactionHash: tx.getId(),
             inputs: tx.ins.map((input: BitcoinJS.TxInput, index: number) => this.inputToPlain(input, index)),
             outputs: tx.outs.map((output: BitcoinJS.TxOutput, index: number) => this.outputToPlain(output, index)),
             version: tx.version,
             vsize: tx.virtualSize(),
             isCoinbase: tx.isCoinbase(),
             weight: tx.weight(),
-            block_hash: null,
-            block_height: null,
-            block_time: null,
+            blockHash: null,
+            blockHeight: null,
+            timestamp: null,
         };
 
         if (plainHeader) {
-            plain.block_hash = plainHeader.blockHash;
-            plain.block_height = plainHeader.blockHeight;
-            plain.block_time = plainHeader.timestamp;
+            plain.blockHash = plainHeader.blockHash;
+            plain.blockHeight = plainHeader.blockHeight;
+            plain.timestamp = plainHeader.timestamp;
         }
 
         return plain;
@@ -218,11 +224,11 @@ export class ElectrumApi {
     static inputToPlain(input: BitcoinJS.TxInput, index: number): PlainInput {
         return {
             script: input.script,
-            txid: bytesToHex(input.hash.reverse()),
-            address: this.deriveAddressFromInput(input),
+            transactionHash: bytesToHex(input.hash.reverse()),
+            address: this.deriveAddressFromInput(input) || null,
             witness: input.witness,
             index,
-            output_index: input.index,
+            outputIndex: input.index,
         };
     }
 
@@ -235,7 +241,7 @@ export class ElectrumApi {
         };
     }
 
-    static deriveAddressFromInput(input: BitcoinJS.TxInput): string {
+    static deriveAddressFromInput(input: BitcoinJS.TxInput): string | undefined {
         const chunks = (BitcoinJS.script.decompile(input.script) || []) as Buffer[];
         const witness = input.witness;
 
@@ -245,7 +251,7 @@ export class ElectrumApi {
             return BitcoinJS.payments.p2pkh({
                 pubkey: chunks[1],
                 network: this.network,
-            }).address!;
+            }).address;
         }
 
         // Nested SegWit P2SH(P2WPKH) (3...)
@@ -256,7 +262,7 @@ export class ElectrumApi {
                     pubkey: witness[1],
                     network: this.network,
                 }),
-            }).address!;
+            }).address;
         }
 
         // Native SegWit P2WPKH (bc1...)
@@ -265,7 +271,7 @@ export class ElectrumApi {
             return BitcoinJS.payments.p2wpkh({
                 pubkey: witness[1],
                 network: this.network,
-            }).address!;
+            }).address;
         }
 
         // Legacy MultiSig P2SH(P2MS) (3...)
@@ -281,7 +287,7 @@ export class ElectrumApi {
                     pubkeys,
                     network: this.network,
                 }),
-            }).address!;
+            }).address;
         }
 
         // Nested SegWit MultiSig P2SH(P2WSH(P2MS)) (3...)
@@ -299,7 +305,7 @@ export class ElectrumApi {
                         network: this.network,
                     }),
                 }),
-            }).address!;
+            }).address;
         }
 
         // Native SegWit MultiSig P2WSH(P2MS) (bc1...)
@@ -315,10 +321,10 @@ export class ElectrumApi {
                     pubkeys,
                     network: this.network,
                 }),
-            }).address!;
+            }).address;
         }
 
         console.error(new Error('Cannot decode address from input'));
-        return '-unknown-';
+        return undefined;
     }
 }
