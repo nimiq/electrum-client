@@ -1,0 +1,14 @@
+{
+  "name": "@nimiq/electrum-client",
+  "version": "0.0.1",
+  "description": "Electrum utilities for the Nimiq ecosystem",
+  "main": "dist/index.js",
+  "author": "Sören <soeren@nimiq.com>",
+  "license": "Apache-2.0",
+  "dependencies": {
+    "bitcoinjs-lib": "^5.1.10"
+  },
+  "devDependencies": {
+    "typescript": "^3.9.7"
+  }
+}
