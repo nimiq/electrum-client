@@ -15,7 +15,6 @@ import {
     DEFAULT_ENDPOINT,
     DEFAULT_TOKEN,
     bytesToHex,
-    hexToBytes,
 } from '../electrum-ws/index';
 
 import {
@@ -26,22 +25,6 @@ import {
     PlainTransaction,
     Receipt,
 } from './types';
-
-export async function scriptPubKeyToScriptHash(scriptPubKey: string | Uint8Array) {
-    if (typeof scriptPubKey === 'string') {
-        // From HEX to bytes
-        scriptPubKey = hexToBytes(scriptPubKey);
-    }
-
-    // Hash with SHA256
-    const hash = new Uint8Array(await window.crypto.subtle.digest('SHA-256', scriptPubKey));
-
-    // Reverse bytes
-    const reversed = new Uint8Array(Array.from(hash).reverse());
-
-    // Convert into HEX
-    return bytesToHex(reversed);
-}
 
 export type Options = {
     endpoint: string,
@@ -72,13 +55,13 @@ export class ElectrumApi {
         });
     }
 
-    public async getBalance(script: string | Uint8Array): Promise<Balance> {
-        return this.socket.request('blockchain.scripthash.get_balance', await scriptPubKeyToScriptHash(script));
+    public async getBalance(address: string): Promise<Balance> {
+        return this.socket.request('blockchain.scripthash.get_balance', await this.addressToScriptHash(address));
     }
 
-    public async getReceipts(script: string | Uint8Array, isScriptHash = false): Promise<Receipt[]> {
+    public async getReceipts(address: string, isScriptHash = false): Promise<Receipt[]> {
         const receipts: Array<{height: number, tx_hash: string}> =
-            await this.socket.request('blockchain.scripthash.get_history', isScriptHash ? script : await scriptPubKeyToScriptHash(script));
+            await this.socket.request('blockchain.scripthash.get_history', isScriptHash ? script : await this.addressToScriptHash(address));
 
         return receipts.map((r) => ({
             blockHeight: r.height,
@@ -86,8 +69,8 @@ export class ElectrumApi {
         }));
     }
 
-    public async getHistory(script: string | Uint8Array) {
-        const history = await this.getReceipts(script);
+    public async getHistory(address: string) {
+        const history = await this.getReceipts(address);
 
         // TODO: Skip known receipts
 
@@ -168,13 +151,13 @@ export class ElectrumApi {
         return this.transactionToPlain(raw, blockHeader);
     }
 
-    async subscribeStatus(script: string | Uint8Array, callback: (receipts: Receipt[]) => any) {
+    async subscribeStatus(address: string, callback: (receipts: Receipt[]) => any) {
         this.socket.subscribe(
             'blockchain.scripthash',
             async (scriptHash: string, status: string) => {
                 callback(await this.getReceipts(scriptHash, true));
             },
-            await scriptPubKeyToScriptHash(script),
+            await this.addressToScriptHash(address),
         );
     }
 
@@ -321,5 +304,16 @@ export class ElectrumApi {
 
         console.error(new Error('Cannot decode address from input'));
         return undefined;
+    }
+
+
+    private async addressToScriptHash(addr: string) {
+        const outputScript = address.toOutputScript(addr, this.options.network);
+
+        // Hash with SHA256
+        const hash = new Uint8Array(await crypto.subtle.digest('SHA-256', outputScript));
+
+        // Convert reversed into HEX
+        return bytesToHex(hash.reverse());
     }
 }
