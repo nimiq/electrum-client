@@ -1,6 +1,6 @@
 import { stringToBytes, bytesToString } from "./helpers";
 
-export type Options = {
+type Options = {
     proxy: boolean,
     token?: string,
     // reconnect: true, // Not yet implemented
