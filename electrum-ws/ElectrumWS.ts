@@ -6,7 +6,7 @@ type Options = {
     // reconnect: true, // Not yet implemented
 }
 
-export const DEFAULT_ENDPOINT = 'wss://api.nimiq.watch:50002';
+export const DEFAULT_ENDPOINT = 'wss://api.nimiqwatch.com:50002';
 export const DEFAULT_TOKEN = 'mainnet:electrum.blockstream.info';
 
 export class ElectrumWS {
