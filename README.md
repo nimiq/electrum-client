@@ -6,6 +6,34 @@ Access Bitcoin ElectrumX servers from browsers via a WebSocket-to-TCP proxy.
 > client. Currently only the underlying `ElectrumWS` (websocket protocol wrapper)
 > and `ElectrumApi` (higher-level API) are implemented.
 
+## Installation
+
+There is no NPM package yet, so you need to set the `#build` branch of this repo
+as the package source:
+
+```bash
+npm install @nimiq/electrum-client@https://github.com/nimiq/electrum-client#build
+# or
+yarn add @nimiq/electrum-client@https://github.com/nimiq/electrum-client#build
+```
+
+### BitcoinJS Library
+
+`ElectrumApi` depends on [bitcoinjs-lib](https://github.com/bitcoinjs/bitcoinjs-lib),
+which is only natively available for NodeJS. To use it in browsers, you need to
+create a build with Browserify and include it as a `<script>` in your app HTML:
+
+```bash
+browserify -r bitcoinjs-lib -s BitcoinJS | terser --compress --mangle > public/bitcoinjs.min.js
+```
+
+You also need to mark the `bitcoinjs-lib` package as _external_ in your bundler to prevent
+it from blowing up your app:
+
+- [Rollup](https://rollupjs.org/guide/en/#warning-treating-module-as-external-dependency)
+  ([example config](example/rollup.config.js#L37-L43))
+- [Webpack](https://webpack.js.org/configuration/externals/#externals)
+
 ## Quick Start
 
 ```javascript
