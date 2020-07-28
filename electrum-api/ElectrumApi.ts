@@ -42,10 +42,11 @@ export class ElectrumApi {
 
         this.options = options as Options;
 
-        this.socket = new ElectrumWS(this.options.endpoint, {
-            proxy: this.options.proxy,
-            token: this.options.token,
-        });
+        const eWSOptions: {proxy?: boolean, token?: string} = {};
+        if ('proxy' in this.options) eWSOptions.proxy = this.options.proxy;
+        if ('token' in this.options) eWSOptions.token = this.options.token;
+
+        this.socket = new ElectrumWS(this.options.endpoint, eWSOptions);
     }
 
     public async getBalance(address: string): Promise<Balance> {
