@@ -1,4 +1,4 @@
 node_modules
-dist
+# dist
 
 example/public/bitcoinjs.min.js
