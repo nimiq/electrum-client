@@ -131,19 +131,7 @@ export class ElectrumApi {
     public async getBlockHeader(height: number): Promise<PlainBlockHeader> {
         const raw: string = await this.socket.request('blockchain.block.header', height);
 
-        const block = Block.fromHex(raw);
-
-        return {
-            blockHash: block.getId(),
-            blockHeight: height,
-            timestamp: block.timestamp,
-            bits: block.bits,
-            nonce: block.nonce,
-            version: block.version,
-            weight: block.weight(),
-            prevHash: block.prevHash ? bytesToHex(block.prevHash.reverse()) : null,
-            merkleRoot: block.merkleRoot ? bytesToHex(block.merkleRoot) : null,
-        };
+        return this.blockHeaderToPlain(raw, height);
     }
 
     async broadcastTransaction(rawTx: string): Promise<PlainTransaction> {
@@ -164,8 +152,8 @@ export class ElectrumApi {
     }
 
     async subscribeHeaders(callback: (header: PlainBlockHeader) => any) {
-        this.socket.subscribe('blockchain.headers', async (headerInfo) => {
-            callback(await this.getBlockHeader(headerInfo.height));
+        this.socket.subscribe('blockchain.headers', async (headerInfo: {height: number, hex: string}) => {
+            callback(this.blockHeaderToPlain(headerInfo.hex, headerInfo.height));
         });
     }
 
@@ -299,6 +287,22 @@ export class ElectrumApi {
 
         console.error(new Error('Cannot decode address from input'));
         return undefined;
+    }
+
+    blockHeaderToPlain(header: string | Block, height: number): PlainBlockHeader {
+        if (typeof header === 'string') header = Block.fromHex(header);
+
+        return {
+            blockHash: header.getId(),
+            blockHeight: height,
+            timestamp: header.timestamp,
+            bits: header.bits,
+            nonce: header.nonce,
+            version: header.version,
+            weight: header.weight(),
+            prevHash: header.prevHash ? bytesToHex(header.prevHash.reverse()) : null,
+            merkleRoot: header.merkleRoot ? bytesToHex(header.merkleRoot) : null,
+        };
     }
 
 
