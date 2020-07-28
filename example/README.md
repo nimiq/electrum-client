@@ -1,104 +1,57 @@
-*Looking for a shareable component template? Go here --> [sveltejs/component-template](https://github.com/sveltejs/component-template)*
+# Electrum API for Browsers: Example App
 
----
+This example is a [Svelte](https://svelte.dev) app created from
+[this template](https://github.com/sveltejs/template).
 
-# svelte app
+## Get running
 
-This is a project template for [Svelte](https://svelte.dev) apps. It lives at https://github.com/sveltejs/template.
-
-To create a new project based on this template using [degit](https://github.com/Rich-Harris/degit):
+First you need to build the ElectrumApi. In the root folder of this project, run
 
 ```bash
-npx degit sveltejs/template svelte-app
-cd svelte-app
+npm install && npm run build
+# or
+yarn && yarn build
 ```
 
-*Note that you will need to have [Node.js](https://nodejs.org) installed.*
-
-
-## Get started
-
-Install the dependencies...
+Then change back into this `example` folder and install the dependencies:
 
 ```bash
-cd svelte-app
 npm install
+# or
+yarn
 ```
 
-...then start [Rollup](https://rollupjs.org):
+Then run it:
 
 ```bash
 npm run dev
+# or
+yarn dev
 ```
 
-Navigate to [localhost:5000](http://localhost:5000). You should see your app running. Edit a component file in `src`, save it, and reload the page to see your changes.
+Navigate to [localhost:5000](http://localhost:5000). You should see the app running
+and displaying the latest Bitcoin block height and how long ago it was mined.
 
-By default, the server will only respond to requests from localhost. To allow connections from other computers, edit the `sirv` commands in package.json to include the option `--host 0.0.0.0`.
+## Providing the BitcoinJS library
 
-
-## Building and running in production mode
-
-To create an optimised version of the app:
+The [bitcoinjs-lib](https://github.com/bitcoinjs/bitcoinjs-lib) project is made
+for usage in NodeJS. To be used in browsers, it must be built with polyfills via
+Browerify:
 
 ```bash
-npm run build
+browserify -r bitcoinjs-lib -s BitcoinJS | terser > public/bitcoinjs.min.js
 ```
 
-You can run the newly built app with `npm run start`. This uses [sirv](https://github.com/lukeed/sirv), which is included in your package.json's `dependencies` so that the app will work when you deploy to platforms like [Heroku](https://heroku.com).
+This is done automatically for you in this example app when running the `dev` or
+`build` scripts. The resulting `public/bitcoinjs.min.js` file is referenced as a
+global script in `public/index.html`. The `bitcoinjs-lib` import in the library is
+declared as _external_ in the [Rollup config](../rollup.config.js), so that it is
+not included in the app bundle.
 
-
-## Single-page app mode
-
-By default, sirv will only respond to requests that match files in `public`. This is to maximise compatibility with static fileservers, allowing you to deploy your app anywhere.
-
-If you're building a single-page app (SPA) with multiple routes, sirv needs to be able to respond to requests for *any* path. You can make it so by editing the `"start"` command in package.json:
-
-```js
-"start": "sirv public --single"
-```
-
-## Using TypeScript
-
-This template comes with a script to set up a TypeScript development environment, you can run it immediately after cloning the template with:
-
-```bash
-node scripts/setupTypeScript.js
-```
-
-Or remove the script via:
-
-```bash
-rm scripts/setupTypeScript.js
-```
-
-## Deploying to the web
-
-### With [Vercel](https://vercel.com)
-
-Install `vercel` if you haven't already:
-
-```bash
-npm install -g vercel
-```
-
-Then, from within your project folder:
-
-```bash
-cd public
-vercel deploy --name my-project
-```
-
-### With [surge](https://surge.sh/)
-
-Install `surge` if you haven't already:
-
-```bash
-npm install -g surge
-```
-
-Then, from within your project folder:
-
-```bash
-npm run build
-surge public my-project.surge.sh
-```
+> I also tried to include the `bitcoinjs-lib` dependency directly via Rollup and
+> polyfill it's NodeJS dependencies via the
+> [`rollup-plugin-node-polyfills`](https://github.com/ionic-team/rollup-plugin-node-polyfills)
+> plugin, but it was not able to correctly detect and polyfill all required NodeJS
+> globals and work well together with Rollup's CommonJS plugin.
+>
+> If anybody wants to experiment futher in this direction, feel free to reach out!
