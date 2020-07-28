@@ -39,17 +39,17 @@ for usage in NodeJS. To be used in browsers, it must be built with polyfills via
 Browerify:
 
 ```bash
-browserify -r bitcoinjs-lib -s BitcoinJS | terser > public/bitcoinjs.min.js
+browserify -r bitcoinjs-lib -s BitcoinJS | terser --compress --mangle > public/bitcoinjs.min.js
 ```
 
 This is done automatically for you in this example app when running the `dev` or
 `build` scripts. The resulting `public/bitcoinjs.min.js` file is referenced as a
-global script in `public/index.html`. The `bitcoinjs-lib` import in the library is
-declared as _external_ in the [Rollup config](../rollup.config.js), so that it is
-not included in the app bundle.
+global script in `public/index.html`. The `bitcoinjs-lib` package import in the
+ElectrumApi library is in turn declared as _external_ in this app's
+[Rollup config](rollup.config.js#L37-L43), so that it is not included in the bundle.
 
 > I also tried to include the `bitcoinjs-lib` dependency directly via Rollup and
-> polyfill it's NodeJS dependencies via the
+> polyfill its NodeJS dependencies via the
 > [`rollup-plugin-node-polyfills`](https://github.com/ionic-team/rollup-plugin-node-polyfills)
 > plugin, but it was not able to correctly detect and polyfill all required NodeJS
 > globals and work well together with Rollup's CommonJS plugin.

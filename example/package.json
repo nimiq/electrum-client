@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "scripts": {
     "build": "yon build:bitcoinjs && yon rollup -c",
-    "build:bitcoinjs": "browserify -r bitcoinjs-lib -s BitcoinJS | terser > public/bitcoinjs.min.js",
+    "build:bitcoinjs": "browserify -r bitcoinjs-lib -s BitcoinJS | terser --compress --mangle > public/bitcoinjs.min.js",
     "dev": "yon build:bitcoinjs && yon rollup -c -w",
     "start": "sirv public"
   },
