@@ -1,14 +1,4 @@
-import {
-    Block,
-    Network,
-    Transaction,
-    TxInput,
-    TxOutput,
-    address,
-    networks,
-    payments,
-    script,
-} from 'bitcoinjs-lib';
+import * as BitcoinJS from 'bitcoinjs-lib';
 
 import {
     ElectrumWS,
@@ -26,7 +16,7 @@ import {
 
 export type Options = {
     endpoint?: string,
-    network?: Network,
+    network?: BitcoinJS.Network,
     proxy?: boolean,
     token?: string,
 }
@@ -35,9 +25,9 @@ export class ElectrumApi {
     private options: Options;
     private socket: ElectrumWS;
 
-    constructor(options: Omit<Options, 'network'> & { network?: 'bitcoin' | 'testnet' | 'regtest' | Network } = {}) {
+    constructor(options: Omit<Options, 'network'> & { network?: 'bitcoin' | 'testnet' | 'regtest' | BitcoinJS.Network } = {}) {
         if (typeof options.network === 'string') {
-            options.network = networks[options.network];
+            options.network = BitcoinJS.networks[options.network];
         }
 
         this.options = options as Options;
@@ -55,7 +45,7 @@ export class ElectrumApi {
 
     public async getReceipts(address: string, isScriptHash = false): Promise<Receipt[]> {
         const receipts: Array<{height: number, tx_hash: string, fee?: number}> =
-            await this.socket.request('blockchain.scripthash.get_history', isScriptHash ? script : await this.addressToScriptHash(address));
+            await this.socket.request('blockchain.scripthash.get_history', isScriptHash ? address : await this.addressToScriptHash(address));
 
         return receipts.map((r) => ({
             blockHeight: r.height,
@@ -157,13 +147,13 @@ export class ElectrumApi {
         });
     }
 
-    transactionToPlain(tx: string | Transaction, plainHeader?: PlainBlockHeader): PlainTransaction {
-        if (typeof tx === 'string') tx = Transaction.fromHex(tx);
+    transactionToPlain(tx: string | BitcoinJS.Transaction, plainHeader?: PlainBlockHeader): PlainTransaction {
+        if (typeof tx === 'string') tx = BitcoinJS.Transaction.fromHex(tx);
 
         const plain: PlainTransaction = {
             transactionHash: tx.getId(),
-            inputs: tx.ins.map((input: TxInput, index: number) => this.inputToPlain(input, index)),
-            outputs: tx.outs.map((output: TxOutput, index: number) => this.outputToPlain(output, index)),
+            inputs: tx.ins.map((input: BitcoinJS.TxInput, index: number) => this.inputToPlain(input, index)),
+            outputs: tx.outs.map((output: BitcoinJS.TxOutput, index: number) => this.outputToPlain(output, index)),
             version: tx.version,
             vsize: tx.virtualSize(),
             isCoinbase: tx.isCoinbase(),
@@ -182,7 +172,7 @@ export class ElectrumApi {
         return plain;
     }
 
-    inputToPlain(input: TxInput, index: number): PlainInput {
+    inputToPlain(input: BitcoinJS.TxInput, index: number): PlainInput {
         return {
             script: input.script,
             transactionHash: bytesToHex(input.hash.reverse()),
@@ -193,23 +183,23 @@ export class ElectrumApi {
         };
     }
 
-    outputToPlain(output: TxOutput, index: number): PlainOutput {
+    outputToPlain(output: BitcoinJS.TxOutput, index: number): PlainOutput {
         return {
             script: output.script,
-            address: address.fromOutputScript(output.script, this.options.network),
+            address: BitcoinJS.address.fromOutputScript(output.script, this.options.network),
             value: output.value,
             index,
         };
     }
 
-    deriveAddressFromInput(input: TxInput): string | undefined {
-        const chunks = (script.decompile(input.script) || []) as Buffer[];
+    deriveAddressFromInput(input: BitcoinJS.TxInput): string | undefined {
+        const chunks = (BitcoinJS.script.decompile(input.script) || []) as Buffer[];
         const witness = input.witness;
 
         // Legacy addresses P2PKH (1...)
         // a4453c9e224a0927f2909e49e3a97b31b5aa74a42d99de8cfcdaf293cb2ecbb7 0,1
         if (chunks.length === 2 && witness.length === 0) {
-            return payments.p2pkh({
+            return BitcoinJS.payments.p2pkh({
                 pubkey: chunks[1],
                 network: this.options.network,
             }).address;
@@ -218,8 +208,8 @@ export class ElectrumApi {
         // Nested SegWit P2SH(P2WPKH) (3...)
         // 6f4e12fa9e869c8721f2d747e042ff80f51c6757277df1563b54d4e9c9454ba0 0,1,2
         if (chunks.length === 1	&& witness.length === 2) {
-            return payments.p2sh({
-                redeem: payments.p2wpkh({
+            return BitcoinJS.payments.p2sh({
+                redeem: BitcoinJS.payments.p2wpkh({
                     pubkey: witness[1],
                     network: this.options.network,
                 }),
@@ -229,7 +219,7 @@ export class ElectrumApi {
         // Native SegWit P2WPKH (bc1...)
         // 3c89e220db701fed2813e0af033610044bc508d2de50cb4c420b8f3ad2d72c5c 0
         if (chunks.length === 0 && witness.length === 2) {
-            return payments.p2wpkh({
+            return BitcoinJS.payments.p2wpkh({
                 pubkey: witness[1],
                 network: this.options.network,
             }).address;
@@ -239,11 +229,11 @@ export class ElectrumApi {
         // 80975cddebaa93aa21a6477c0d050685d6820fa1068a2731db0f39b535cbd369 0,1,2
         if (chunks.length > 2 && witness.length === 0) {
             const m = chunks.length - 2; // Number of signatures
-            const pubkeys = script.decompile(chunks[chunks.length - 1])!
+            const pubkeys = BitcoinJS.script.decompile(chunks[chunks.length - 1])!
                 .filter((n: number | Buffer) => typeof n !== 'number') as Buffer[];
 
-            return payments.p2sh({
-                redeem: payments.p2ms({
+            return BitcoinJS.payments.p2sh({
+                redeem: BitcoinJS.payments.p2ms({
                     m,
                     pubkeys,
                     network: this.options.network,
@@ -255,12 +245,12 @@ export class ElectrumApi {
         // 80975cddebaa93aa21a6477c0d050685d6820fa1068a2731db0f39b535cbd369 3
         if (chunks.length === 1 && witness.length > 2) {
             const m = witness.length - 2; // Number of signatures
-            const pubkeys = script.decompile(witness[witness.length - 1])!
+            const pubkeys = BitcoinJS.script.decompile(witness[witness.length - 1])!
                 .filter((n: number | Uint8Array) => typeof n !== 'number') as Buffer[];
 
-            return payments.p2sh({
-                redeem: payments.p2wsh({
-                    redeem: payments.p2ms({
+            return BitcoinJS.payments.p2sh({
+                redeem: BitcoinJS.payments.p2wsh({
+                    redeem: BitcoinJS.payments.p2ms({
                         m,
                         pubkeys,
                         network: this.options.network,
@@ -273,11 +263,11 @@ export class ElectrumApi {
         // 54a3e33efff4c508fa5c8ce7ccf4b08538a8fd2bf808b97ae51c21cf83df2dd1 0
         if (chunks.length === 0 && witness.length > 2) {
             const m = witness.length - 2; // Number of signatures
-            const pubkeys = script.decompile(witness[witness.length - 1])!
+            const pubkeys = BitcoinJS.script.decompile(witness[witness.length - 1])!
                 .filter((n: number | Uint8Array) => typeof n !== 'number') as Buffer[];
 
-            return payments.p2wsh({
-                redeem: payments.p2ms({
+            return BitcoinJS.payments.p2wsh({
+                redeem: BitcoinJS.payments.p2ms({
                     m,
                     pubkeys,
                     network: this.options.network,
@@ -289,8 +279,8 @@ export class ElectrumApi {
         return undefined;
     }
 
-    blockHeaderToPlain(header: string | Block, height: number): PlainBlockHeader {
-        if (typeof header === 'string') header = Block.fromHex(header);
+    blockHeaderToPlain(header: string | BitcoinJS.Block, height: number): PlainBlockHeader {
+        if (typeof header === 'string') header = BitcoinJS.Block.fromHex(header);
 
         return {
             blockHash: header.getId(),
@@ -307,7 +297,7 @@ export class ElectrumApi {
 
 
     private async addressToScriptHash(addr: string) {
-        const outputScript = address.toOutputScript(addr, this.options.network);
+        const outputScript = BitcoinJS.address.toOutputScript(addr, this.options.network);
 
         // Hash with SHA256
         const hash = new Uint8Array(await crypto.subtle.digest('SHA-256', outputScript));
