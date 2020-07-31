@@ -54,39 +54,50 @@ export class ElectrumApi {
         }));
     }
 
-    public async getHistory(address: string) {
-        const history = await this.getReceipts(address);
 
-        // TODO: Skip known receipts
+    // TODO: Move into future ElectrumClient to take advantage of the current chain height to calculate confirmations and tx state.
+    public async getHistory(address: string, sinceBlockHeight = 0, knownReceipts = [] as Receipt[], limit = Infinity) {
+        // Prepare map of known transactions
+        const knownTxs = new Map<string, Receipt>();
+        if (knownReceipts) {
+            for (const receipt of knownReceipts) {
+                knownTxs.set(receipt.transactionHash, receipt);
+            }
+        }
+
+        let history = await this.getReceipts(address);
 
         // Sort by height DESC to fetch newest txs first
         history.sort((a, b) => (b.blockHeight || Number.MAX_SAFE_INTEGER) - (a.blockHeight || Number.MAX_SAFE_INTEGER));
 
-        const blockHeights = history.reduce((array, entry) => {
-            const height = entry.blockHeight;
-            if (height > 0) array.push(height);
-            return array;
-        }, [] as number[]);
+        // Reduce history to limit
+        if (limit < Infinity) {
+            history = history.slice(0, limit);
+        }
+
+        // Remove unwanted history
+        if (sinceBlockHeight > 0) {
+            const firstUnwantedHistoryIndex = history.findIndex(receipt => receipt.blockHeight > 0 && receipt.blockHeight < sinceBlockHeight);
+            history = history.slice(0, firstUnwantedHistoryIndex);
+        }
 
         const blockHeaders = new Map<number, PlainBlockHeader>();
-
-        // Fetch block headers
-        for (const height of blockHeights) {
-            try {
-                blockHeaders.set(height, await this.getBlockHeader(height));
-            } catch (error) {
-                console.error(error);
-                break;
-            }
-        }
 
         // Fetch transactions
         const txs = [];
         for (const { transactionHash, blockHeight } of history) {
+            const knownTx = knownTxs.get(transactionHash);
+            if (knownTx && knownTx.blockHeight === blockHeight) continue;
+
             try {
                 const tx = await this.getTransaction(transactionHash);
 
-                const blockHeader = blockHeaders.get(blockHeight);
+                let blockHeader = blockHeaders.get(blockHeight);
+                if (!blockHeader && blockHeight > 0) {
+                    blockHeader = await this.getBlockHeader(blockHeight);
+                    blockHeaders.set(blockHeight, blockHeader);
+                }
+
                 if (blockHeader) {
                     tx.blockHeight = blockHeight;
                     tx.timestamp = blockHeader.timestamp;
