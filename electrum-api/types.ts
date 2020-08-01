@@ -10,16 +10,16 @@ export type Receipt = {
 }
 
 export type PlainInput = {
-    script: Uint8Array,
+    script: string,
     transactionHash: string,
     address: string | null,
-    witness: Array<number | Uint8Array>,
+    witness: Array<number | string>,
     index: number,
     outputIndex: number,
 }
 
 export type PlainOutput = {
-    script: Uint8Array,
+    script: string,
     address: string,
     value: number,
     index: number,
