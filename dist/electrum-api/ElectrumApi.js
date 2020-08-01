@@ -44,7 +44,7 @@ export class ElectrumApi {
         const txs = [];
         for (const { transactionHash, blockHeight } of history) {
             const knownTx = knownTxs.get(transactionHash);
-            if (knownTx && knownTx.blockHeight === blockHeight)
+            if (knownTx && knownTx.blockHeight === Math.max(blockHeight, 0))
                 continue;
             try {
                 const tx = await this.getTransaction(transactionHash);
@@ -126,17 +126,21 @@ export class ElectrumApi {
     }
     inputToPlain(input, index) {
         return {
-            script: input.script,
+            script: bytesToHex(input.script),
             transactionHash: bytesToHex(input.hash.reverse()),
             address: this.deriveAddressFromInput(input) || null,
-            witness: input.witness,
+            witness: input.witness.map((buf) => {
+                if (typeof buf === 'number')
+                    return buf;
+                return bytesToHex(buf);
+            }),
             index,
             outputIndex: input.index,
         };
     }
     outputToPlain(output, index) {
         return {
-            script: output.script,
+            script: bytesToHex(output.script),
             address: BitcoinJS.address.fromOutputScript(output.script, this.options.network),
             value: output.value,
             index,
