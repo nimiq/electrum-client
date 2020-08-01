@@ -99,24 +99,30 @@ export class ElectrumWS {
     }
 
     private onMessage(msg: MessageEvent) {
-        const response = JSON.parse(bytesToString(msg.data));
-        console.debug('ElectrumWS MSG:', response);
+        // Handle potential multi-line frames
+        const raw = bytesToString(msg.data as Uint8Array);
+        const lines = raw.split('\n').filter(line => line.length > 0);
 
-        if ('id' in response && this.requests.has(response.id)) {
-            const callbacks = this.requests.get(response.id)!;
-            this.requests.delete(response.id);
+        for (const line of lines) {
+            const response = JSON.parse(line);
+            console.debug('ElectrumWS MSG:', response);
 
-            if ("result" in response) callbacks.resolve(response.result);
-            else callbacks.reject(new Error(response.error || 'No result'));
-        }
+            if ('id' in response && this.requests.has(response.id)) {
+                const callbacks = this.requests.get(response.id)!;
+                this.requests.delete(response.id);
 
-        if ('method' in response && /** @type {string} */ (response.method).endsWith('subscribe')) {
-            const method = response.method;
-            const params = response.params;
-            const subscriptionKey = `${method}${typeof params[0] === 'string' ? `-${params[0]}` : ''}`;
-            if (this.subscriptions.has(subscriptionKey)) {
-                const callback = this.subscriptions.get(subscriptionKey)!;
-                callback(...params);
+                if ("result" in response) callbacks.resolve(response.result);
+                else callbacks.reject(new Error(response.error || 'No result'));
+            }
+
+            if ('method' in response && /** @type {string} */ (response.method).endsWith('subscribe')) {
+                const method = response.method;
+                const params = response.params;
+                const subscriptionKey = `${method}${typeof params[0] === 'string' ? `-${params[0]}` : ''}`;
+                if (this.subscriptions.has(subscriptionKey)) {
+                    const callback = this.subscriptions.get(subscriptionKey)!;
+                    callback(...params);
+                }
             }
         }
     }
