@@ -84,6 +84,9 @@ export class ElectrumApi {
         const raw = await this.socket.request('blockchain.block.header', height);
         return this.blockHeaderToPlain(raw, height);
     }
+    async getFeeHistogram() {
+        return this.socket.request('mempool.get_fee_histogram');
+    }
     async broadcastTransaction(rawTx) {
         const tx = this.transactionToPlain(rawTx);
         const hash = await this.socket.request('blockchain.transaction.broadcast', rawTx);

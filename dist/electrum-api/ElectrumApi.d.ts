@@ -17,6 +17,7 @@ export declare class ElectrumApi {
     getHistory(address: string, sinceBlockHeight?: number, knownReceipts?: Receipt[], limit?: number): Promise<PlainTransaction[]>;
     getTransaction(hash: string, height?: number): Promise<PlainTransaction>;
     getBlockHeader(height: number): Promise<PlainBlockHeader>;
+    getFeeHistogram(): Promise<Array<[number, number]>>;
     broadcastTransaction(rawTx: string): Promise<PlainTransaction>;
     subscribeReceipts(address: string, callback: (receipts: Receipt[]) => any): Promise<void>;
     subscribeHeaders(callback: (header: PlainBlockHeader) => any): Promise<void>;
