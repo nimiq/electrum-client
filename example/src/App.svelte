@@ -12,6 +12,7 @@
 	import { ElectrumApi } from '../..';
 
 	const electrum = new ElectrumApi();
+	window.electrum = electrum;
 
 	let head = null;
 	electrum.subscribeHeaders((header) => {
