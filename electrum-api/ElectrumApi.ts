@@ -149,15 +149,11 @@ export class ElectrumApi {
         else throw new Error(hash); // Protocol v1.0 returns errors as the result string
     }
 
-    async subscribeReceipts(address: string, callback: (receipts: Receipt[] | null) => any) {
+    async subscribeReceipts(address: string, callback: (receipts: Receipt[]) => any) {
         this.socket.subscribe(
             'blockchain.scripthash',
-            async (scriptHash: string | null, status: string) => {
-                if (!scriptHash) { // This happens in the first callback when no transactions exist
-                    callback(null);
-                } else {
-                    callback(await this.getReceipts(scriptHash, true));
-                }
+            async (scriptHash: string, status: string | null) => {
+                callback(!status ? [] : await this.getReceipts(scriptHash, true));
             },
             await this.addressToScriptHash(address),
         );
