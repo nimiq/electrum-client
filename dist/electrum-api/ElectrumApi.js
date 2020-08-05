@@ -6,12 +6,14 @@ export class ElectrumApi {
             options.network = BitcoinJS.networks[options.network];
         }
         this.options = options;
-        const eWSOptions = {};
+        const wsOptions = {};
         if ('proxy' in this.options)
-            eWSOptions.proxy = this.options.proxy;
+            wsOptions.proxy = this.options.proxy;
         if ('token' in this.options)
-            eWSOptions.token = this.options.token;
-        this.socket = new ElectrumWS(this.options.endpoint, eWSOptions);
+            wsOptions.token = this.options.token;
+        if ('reconnect' in this.options)
+            wsOptions.reconnect = this.options.reconnect;
+        this.socket = new ElectrumWS(this.options.endpoint, wsOptions);
     }
     async getBalance(address) {
         return this.socket.request('blockchain.scripthash.get_balance', await this.addressToScriptHash(address));

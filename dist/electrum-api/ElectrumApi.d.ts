@@ -1,15 +1,16 @@
 import * as BitcoinJS from 'bitcoinjs-lib';
 import { Balance, PlainBlockHeader, PlainInput, PlainOutput, PlainTransaction, Receipt } from './types';
-export declare type Options = {
+export declare type ElectrumApiOptions = {
     endpoint?: string;
     network?: BitcoinJS.Network;
     proxy?: boolean;
     token?: string;
+    reconnect?: boolean;
 };
 export declare class ElectrumApi {
     private options;
     private socket;
-    constructor(options?: Omit<Options, 'network'> & {
+    constructor(options?: Omit<ElectrumApiOptions, 'network'> & {
         network?: 'bitcoin' | 'testnet' | 'regtest' | BitcoinJS.Network;
     });
     getBalance(address: string): Promise<Balance>;
