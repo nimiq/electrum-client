@@ -2,6 +2,7 @@ import * as BitcoinJS from 'bitcoinjs-lib';
 
 import {
     ElectrumWS,
+    ElectrumWSOptions,
     bytesToHex,
 } from '../electrum-ws/index';
 
@@ -14,29 +15,31 @@ import {
     Receipt,
 } from './types';
 
-export type Options = {
+export type ElectrumApiOptions = {
     endpoint?: string,
     network?: BitcoinJS.Network,
     proxy?: boolean,
     token?: string,
+    reconnect?: boolean;
 }
 
 export class ElectrumApi {
-    private options: Options;
+    private options: ElectrumApiOptions;
     private socket: ElectrumWS;
 
-    constructor(options: Omit<Options, 'network'> & { network?: 'bitcoin' | 'testnet' | 'regtest' | BitcoinJS.Network } = {}) {
+    constructor(options: Omit<ElectrumApiOptions, 'network'> & { network?: 'bitcoin' | 'testnet' | 'regtest' | BitcoinJS.Network } = {}) {
         if (typeof options.network === 'string') {
             options.network = BitcoinJS.networks[options.network];
         }
 
-        this.options = options as Options;
+        this.options = options as ElectrumApiOptions;
 
-        const eWSOptions: {proxy?: boolean, token?: string} = {};
-        if ('proxy' in this.options) eWSOptions.proxy = this.options.proxy;
-        if ('token' in this.options) eWSOptions.token = this.options.token;
+        const wsOptions: Partial<ElectrumWSOptions> = {};
+        if ('proxy' in this.options) wsOptions.proxy = this.options.proxy;
+        if ('token' in this.options) wsOptions.token = this.options.token;
+        if ('reconnect' in this.options) wsOptions.reconnect = this.options.reconnect;
 
-        this.socket = new ElectrumWS(this.options.endpoint, eWSOptions);
+        this.socket = new ElectrumWS(this.options.endpoint, wsOptions);
     }
 
     public async getBalance(address: string): Promise<Balance> {
