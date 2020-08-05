@@ -99,7 +99,12 @@ export class ElectrumApi {
     }
     async subscribeReceipts(address, callback) {
         this.socket.subscribe('blockchain.scripthash', async (scriptHash, status) => {
-            callback(await this.getReceipts(scriptHash, true));
+            if (!scriptHash) {
+                callback(null);
+            }
+            else {
+                callback(await this.getReceipts(scriptHash, true));
+            }
         }, await this.addressToScriptHash(address));
     }
     async subscribeHeaders(callback) {
