@@ -1,48 +1,45 @@
 import { stringToBytes, bytesToString } from "./helpers";
 
-type Options = {
+export type ElectrumWSOptions = {
     proxy: boolean,
     token?: string,
-    // reconnect: true, // Not yet implemented
+    reconnect: boolean,
 }
 
 export const DEFAULT_ENDPOINT = 'wss://api.nimiqwatch.com:50002';
 export const DEFAULT_TOKEN = 'mainnet:electrum.blockstream.info';
 
 export class ElectrumWS {
-    private options: Options;
+    private options: ElectrumWSOptions;
+    private endpoint: string;
 
     private requests = new Map<number, {resolve: (result: any) => any, reject: (error: Error) => any}>();
     private subscriptions = new Map<string, (...payload: any[]) => any>();
 
-    private connected!: Promise<void>;
+    private connected = false;
+    private connectedPromise!: Promise<void>;
     private connectedResolver!: () => void;
     private connectedRejector!: () => void;
 
     private pingInterval: number = -1;
 
-    public ws: WebSocket;
+    public ws!: WebSocket;
 
-    constructor(endpoint = DEFAULT_ENDPOINT, options: Partial<Options> = {}) {
+    constructor(endpoint = DEFAULT_ENDPOINT, options: Partial<ElectrumWSOptions> = {}) {
+        this.endpoint = endpoint;
+
         this.options = Object.assign({
             proxy: true,
             token: DEFAULT_TOKEN,
+            reconnect: true,
         }, options);
 
         this.setupConnectedPromise();
 
-        this.ws = new WebSocket(`${endpoint}?token=${this.options.token}`, 'binary');
-        this.ws.binaryType = 'arraybuffer';
-
-        this.ws.addEventListener('open', this.onOpen.bind(this));
-        this.ws.addEventListener('message', this.onMessage.bind(this));
-        this.ws.addEventListener('error', this.onError.bind(this));
-        this.ws.addEventListener('close', this.onClose.bind(this));
+        this.connect();
     }
 
-    public async request(method: string, ...params: any[]): Promise<any> {
-        console.debug('ElectrumWS SEND:', method, ...params);
-
+    public async request(method: string, ...params: (string | number)[]): Promise<any> {
         let id: number;
         do {
             id = Math.ceil(Math.random() * 1e5);
@@ -62,40 +59,74 @@ export class ElectrumWS {
             });
         });
 
-        await this.connected;
+        await this.connectedPromise;
 
+        console.debug('ElectrumWS SEND:', method, ...params);
         this.ws.send(stringToBytes(JSON.stringify(payload) + (this.options.proxy ? '\n' : '')));
 
         return promise;
     }
 
-    public async subscribe(method: string, callback: (...payload: any[]) => any, ...params: any[]) {
+    public async subscribe(method: string, callback: (...payload: any[]) => any, ...params: (string | number)[]) {
         method = `${method}.subscribe`;
-        const subscriptionKey = `${method}${typeof params[0] === 'string' ? `-${params[0]}` : ''}`;
+        const subscriptionKey = `${method}${params.length > 0 ? `-${params.join('-')}` : ''}`;
         this.subscriptions.set(subscriptionKey, callback);
+
+        // If not currently connected, the subscription will be activated in onOpen()
+        if (!this.connected) return;
 
         callback(await this.request(method, ...params));
     }
 
-    public async unsubscribe(method: string, ...params: any[]) {
+    public async unsubscribe(method: string, ...params: (string | number)[]) {
         method = `${method}.subscribe`;
-        const subscriptionKey = `${method}${typeof params[0] === 'string' ? `-${params[0]}` : ''}`;
+        const subscriptionKey = `${method}${params.length > 0 ? `-${params.join('-')}` : ''}`;
         this.subscriptions.delete(subscriptionKey);
 
         return this.request(`${method}.unsubscribe`, ...params);
     }
 
     private setupConnectedPromise() {
-        this.connected = new Promise((resolve, reject) => {
+        this.connectedPromise = new Promise((resolve, reject) => {
             this.connectedResolver = resolve;
             this.connectedRejector = reject;
         });
     }
 
-    private onOpen() {
+    private connect() {
+        let url = this.endpoint;
+        if (this.options.token) {
+            url = `${url}?token=${this.options.token}`;
+        }
+        this.ws = new WebSocket(url, 'binary');
+        this.ws.binaryType = 'arraybuffer';
+
+        this.ws.addEventListener('open', this.onOpen.bind(this));
+        this.ws.addEventListener('message', this.onMessage.bind(this));
+        this.ws.addEventListener('error', this.onError.bind(this));
+        this.ws.addEventListener('close', this.onClose.bind(this));
+    }
+
+    private ping() {
+        this.request('server.ping');
+    }
+
+    private async onOpen() {
         console.debug('ElectrumWS OPEN');
+        this.connected = true;
         this.connectedResolver();
-        this.pingInterval = window.setInterval(() => this.request('server.ping'), 30 * 1000); // Send ping every 30s
+        this.pingInterval = window.setInterval(this.ping.bind(this), 30 * 1000); // Send ping every 30s
+
+        // Resubscribe to registered subscriptions
+        for (const [subscriptionKey, callback] of this.subscriptions) {
+            const params = subscriptionKey.split('-');
+            const method = params.shift();
+            if (!method) {
+                console.warn('Cannot resubscribe, no method in subscription key:', subscriptionKey);
+                continue;
+            }
+            callback(await this.request(method, ...params));
+        }
     }
 
     private onMessage(msg: MessageEvent) {
@@ -133,8 +164,13 @@ export class ElectrumWS {
 
     private onClose(event: CloseEvent) {
         console.warn('ElectrumWS CLOSED:', event);
-        this.connectedRejector();
-        this.setupConnectedPromise();
         clearInterval(this.pingInterval);
+        this.connected = false;
+        this.connectedRejector();
+
+        if (this.options.reconnect) {
+            this.setupConnectedPromise();
+            this.connect();
+        }
     }
 }
