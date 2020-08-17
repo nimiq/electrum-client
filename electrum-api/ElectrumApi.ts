@@ -168,10 +168,13 @@ export class ElectrumApi {
     transactionToPlain(tx: string | BitcoinJS.Transaction, plainHeader?: PlainBlockHeader): PlainTransaction {
         if (typeof tx === 'string') tx = BitcoinJS.Transaction.fromHex(tx);
 
+        const inputs = tx.ins.map((input: BitcoinJS.TxInput, index: number) => this.inputToPlain(input, index));
+        const outputs = tx.outs.map((output: BitcoinJS.TxOutput, index: number) => this.outputToPlain(output, index));
+
         const plain: PlainTransaction = {
             transactionHash: tx.getId(),
-            inputs: tx.ins.map((input: BitcoinJS.TxInput, index: number) => this.inputToPlain(input, index)),
-            outputs: tx.outs.map((output: BitcoinJS.TxOutput, index: number) => this.outputToPlain(output, index)),
+            inputs,
+            outputs,
             version: tx.version,
             vsize: tx.virtualSize(),
             isCoinbase: tx.isCoinbase(),
@@ -179,6 +182,8 @@ export class ElectrumApi {
             blockHash: null,
             blockHeight: null,
             timestamp: null,
+            // Sequence constant from https://github.com/bitcoin/bips/blob/master/bip-0125.mediawiki#summary
+            replaceByFee: inputs.some((input) => input.sequence < 0xfffffffe),
         };
 
         if (plainHeader) {
@@ -201,6 +206,7 @@ export class ElectrumApi {
             }),
             index,
             outputIndex: input.index,
+            sequence: input.sequence,
         };
     }
 
