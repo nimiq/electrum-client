@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "scripts": {
     "build": "yon build:bitcoinjs && yon rollup -c",
-    "build:bitcoinjs": "browserify -r bitcoinjs-lib -s BitcoinJS | terser --compress --mangle > public/bitcoinjs.min.js",
+    "build:bitcoinjs": "browserify -p tinyify ../bitcoinjs.js -s BitcoinJS > public/bitcoinjs.min.js",
     "dev": "yon build:bitcoinjs && yon rollup -c -w",
     "start": "sirv public"
   },
@@ -16,6 +16,7 @@
     "rollup-plugin-svelte": "^5.0.3",
     "rollup-plugin-terser": "^5.1.2",
     "svelte": "^3.0.0",
+    "tinyify": "^3.0.0",
     "yarn-or-npm": "^3.0.1"
   },
   "dependencies": {
