@@ -99,12 +99,7 @@ export class ElectrumApi {
     }
     async subscribeReceipts(address, callback) {
         this.socket.subscribe('blockchain.scripthash', async (scriptHash, status) => {
-            if (!scriptHash) {
-                callback(null);
-            }
-            else {
-                callback(await this.getReceipts(scriptHash, true));
-            }
+            callback(!status ? [] : await this.getReceipts(scriptHash, true));
         }, await this.addressToScriptHash(address));
     }
     async subscribeHeaders(callback) {
@@ -115,10 +110,12 @@ export class ElectrumApi {
     transactionToPlain(tx, plainHeader) {
         if (typeof tx === 'string')
             tx = BitcoinJS.Transaction.fromHex(tx);
+        const inputs = tx.ins.map((input, index) => this.inputToPlain(input, index));
+        const outputs = tx.outs.map((output, index) => this.outputToPlain(output, index));
         const plain = {
             transactionHash: tx.getId(),
-            inputs: tx.ins.map((input, index) => this.inputToPlain(input, index)),
-            outputs: tx.outs.map((output, index) => this.outputToPlain(output, index)),
+            inputs,
+            outputs,
             version: tx.version,
             vsize: tx.virtualSize(),
             isCoinbase: tx.isCoinbase(),
@@ -126,6 +123,7 @@ export class ElectrumApi {
             blockHash: null,
             blockHeight: null,
             timestamp: null,
+            replaceByFee: inputs.some((input) => input.sequence < 0xfffffffe),
         };
         if (plainHeader) {
             plain.blockHash = plainHeader.blockHash;
@@ -146,6 +144,7 @@ export class ElectrumApi {
             }),
             index,
             outputIndex: input.index,
+            sequence: input.sequence,
         };
     }
     outputToPlain(output, index) {

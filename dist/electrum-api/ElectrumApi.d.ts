@@ -20,7 +20,7 @@ export declare class ElectrumApi {
     getBlockHeader(height: number): Promise<PlainBlockHeader>;
     getFeeHistogram(): Promise<Array<[number, number]>>;
     broadcastTransaction(rawTx: string): Promise<PlainTransaction>;
-    subscribeReceipts(address: string, callback: (receipts: Receipt[] | null) => any): Promise<void>;
+    subscribeReceipts(address: string, callback: (receipts: Receipt[]) => any): Promise<void>;
     subscribeHeaders(callback: (header: PlainBlockHeader) => any): Promise<void>;
     transactionToPlain(tx: string | BitcoinJS.Transaction, plainHeader?: PlainBlockHeader): PlainTransaction;
     inputToPlain(input: BitcoinJS.TxInput, index: number): PlainInput;

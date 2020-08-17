@@ -39,16 +39,14 @@ export class ElectrumWS {
         return promise;
     }
     async subscribe(method, callback, ...params) {
-        method = `${method}.subscribe`;
-        const subscriptionKey = `${method}${params.length > 0 ? `-${params.join('-')}` : ''}`;
+        const subscriptionKey = `${method}${typeof params[0] === 'string' ? `-${params[0]}` : ''}`;
         this.subscriptions.set(subscriptionKey, callback);
         if (!this.connected)
             return;
-        callback(await this.request(method, ...params));
+        callback(...params, await this.request(`${method}.subscribe`, ...params));
     }
     async unsubscribe(method, ...params) {
-        method = `${method}.subscribe`;
-        const subscriptionKey = `${method}${params.length > 0 ? `-${params.join('-')}` : ''}`;
+        const subscriptionKey = `${method}${typeof params[0] === 'string' ? `-${params[0]}` : ''}`;
         this.subscriptions.delete(subscriptionKey);
         return this.request(`${method}.unsubscribe`, ...params);
     }
@@ -85,7 +83,7 @@ export class ElectrumWS {
                 console.warn('Cannot resubscribe, no method in subscription key:', subscriptionKey);
                 continue;
             }
-            callback(await this.request(method, ...params));
+            this.subscribe(method, callback, ...params);
         }
     }
     onMessage(msg) {
@@ -103,7 +101,7 @@ export class ElectrumWS {
                     callbacks.reject(new Error(response.error || 'No result'));
             }
             if ('method' in response && (response.method).endsWith('subscribe')) {
-                const method = response.method;
+                const method = response.method.replace('.subscribe', '');
                 const params = response.params;
                 const subscriptionKey = `${method}${typeof params[0] === 'string' ? `-${params[0]}` : ''}`;
                 if (this.subscriptions.has(subscriptionKey)) {
