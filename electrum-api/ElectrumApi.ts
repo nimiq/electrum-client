@@ -149,15 +149,11 @@ export class ElectrumApi {
         else throw new Error(hash); // Protocol v1.0 returns errors as the result string
     }
 
-    async subscribeReceipts(address: string, callback: (receipts: Receipt[] | null) => any) {
+    async subscribeReceipts(address: string, callback: (receipts: Receipt[]) => any) {
         this.socket.subscribe(
             'blockchain.scripthash',
-            async (scriptHash: string | null, status: string) => {
-                if (!scriptHash) { // This happens in the first callback when no transactions exist
-                    callback(null);
-                } else {
-                    callback(await this.getReceipts(scriptHash, true));
-                }
+            async (scriptHash: string, status: string | null) => {
+                callback(!status ? [] : await this.getReceipts(scriptHash, true));
             },
             await this.addressToScriptHash(address),
         );
@@ -172,10 +168,13 @@ export class ElectrumApi {
     transactionToPlain(tx: string | BitcoinJS.Transaction, plainHeader?: PlainBlockHeader): PlainTransaction {
         if (typeof tx === 'string') tx = BitcoinJS.Transaction.fromHex(tx);
 
+        const inputs = tx.ins.map((input: BitcoinJS.TxInput, index: number) => this.inputToPlain(input, index));
+        const outputs = tx.outs.map((output: BitcoinJS.TxOutput, index: number) => this.outputToPlain(output, index));
+
         const plain: PlainTransaction = {
             transactionHash: tx.getId(),
-            inputs: tx.ins.map((input: BitcoinJS.TxInput, index: number) => this.inputToPlain(input, index)),
-            outputs: tx.outs.map((output: BitcoinJS.TxOutput, index: number) => this.outputToPlain(output, index)),
+            inputs,
+            outputs,
             version: tx.version,
             vsize: tx.virtualSize(),
             isCoinbase: tx.isCoinbase(),
@@ -183,6 +182,8 @@ export class ElectrumApi {
             blockHash: null,
             blockHeight: null,
             timestamp: null,
+            // Sequence constant from https://github.com/bitcoin/bips/blob/master/bip-0125.mediawiki#summary
+            replaceByFee: inputs.some((input) => input.sequence < 0xfffffffe),
         };
 
         if (plainHeader) {
@@ -205,6 +206,7 @@ export class ElectrumApi {
             }),
             index,
             outputIndex: input.index,
+            sequence: input.sequence,
         };
     }
 

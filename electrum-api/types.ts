@@ -16,6 +16,7 @@ export type PlainInput = {
     witness: Array<number | string>,
     index: number,
     outputIndex: number,
+    sequence: number,
 }
 
 export type PlainOutput = {
@@ -36,6 +37,7 @@ export type PlainTransaction = {
     blockHash: string | null,
     blockHeight: number | null,
     timestamp: number | null,
+    replaceByFee: boolean,
 }
 
 export type PlainBlockHeader = {

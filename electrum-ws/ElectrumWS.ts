@@ -68,19 +68,17 @@ export class ElectrumWS {
     }
 
     public async subscribe(method: string, callback: (...payload: any[]) => any, ...params: (string | number)[]) {
-        method = `${method}.subscribe`;
-        const subscriptionKey = `${method}${params.length > 0 ? `-${params.join('-')}` : ''}`;
+        const subscriptionKey = `${method}${typeof params[0] === 'string' ? `-${params[0]}` : ''}`;
         this.subscriptions.set(subscriptionKey, callback);
 
         // If not currently connected, the subscription will be activated in onOpen()
         if (!this.connected) return;
 
-        callback(await this.request(method, ...params));
+        callback(...params, await this.request(`${method}.subscribe` , ...params));
     }
 
     public async unsubscribe(method: string, ...params: (string | number)[]) {
-        method = `${method}.subscribe`;
-        const subscriptionKey = `${method}${params.length > 0 ? `-${params.join('-')}` : ''}`;
+        const subscriptionKey = `${method}${typeof params[0] === 'string' ? `-${params[0]}` : ''}`;
         this.subscriptions.delete(subscriptionKey);
 
         return this.request(`${method}.unsubscribe`, ...params);
@@ -125,7 +123,7 @@ export class ElectrumWS {
                 console.warn('Cannot resubscribe, no method in subscription key:', subscriptionKey);
                 continue;
             }
-            callback(await this.request(method, ...params));
+            this.subscribe(method, callback, ...params);
         }
     }
 
@@ -147,8 +145,10 @@ export class ElectrumWS {
             }
 
             if ('method' in response && /** @type {string} */ (response.method).endsWith('subscribe')) {
-                const method = response.method;
+                const method = response.method.replace('.subscribe', '');
                 const params = response.params;
+                // If first parameter is a string (for scripthash subscriptions), it's part of the subscription key.
+                // If first parameter is an object (for header subscriptions), it's not.
                 const subscriptionKey = `${method}${typeof params[0] === 'string' ? `-${params[0]}` : ''}`;
                 if (this.subscriptions.has(subscriptionKey)) {
                     const callback = this.subscriptions.get(subscriptionKey)!;
