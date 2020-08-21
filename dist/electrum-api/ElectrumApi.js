@@ -1,5 +1,5 @@
 import * as BitcoinJS from 'bitcoinjs-lib';
-import { ElectrumWS, bytesToHex, } from '../electrum-ws/index';
+import { ElectrumWS, bytesToHex, hexToBytes, } from '../electrum-ws/index';
 export class ElectrumApi {
     constructor(options = {}) {
         if (typeof options.network === 'string') {
@@ -49,38 +49,57 @@ export class ElectrumApi {
             if (knownTx && knownTx.blockHeight === Math.max(blockHeight, 0))
                 continue;
             try {
-                const tx = await this.getTransaction(transactionHash);
                 let blockHeader = blockHeaders.get(blockHeight);
                 if (!blockHeader && blockHeight > 0) {
                     blockHeader = await this.getBlockHeader(blockHeight);
                     blockHeaders.set(blockHeight, blockHeader);
                 }
-                if (blockHeader) {
-                    tx.blockHeight = blockHeight;
-                    tx.timestamp = blockHeader.timestamp;
-                    tx.blockHash = blockHeader.blockHash;
+                try {
+                    const tx = await this.getTransaction(transactionHash, blockHeader);
+                    txs.push(tx);
                 }
-                txs.push(tx);
+                catch (error) {
+                    console.warn(error);
+                    continue;
+                }
             }
             catch (error) {
-                console.error(error);
+                console.warn(error);
                 return txs;
             }
         }
         return txs;
     }
-    async getTransaction(hash, height) {
-        const raw = await this.socket.request('blockchain.transaction.get', hash);
+    async getTransaction(hash, heightOrBlockHeader) {
         let blockHeader;
-        if (typeof height === 'number' && height > 0) {
-            try {
-                blockHeader = await this.getBlockHeader(height);
-            }
-            catch (error) {
-                console.error(error);
+        if (typeof heightOrBlockHeader === 'object') {
+            blockHeader = heightOrBlockHeader;
+        }
+        else if (typeof heightOrBlockHeader === 'number' && heightOrBlockHeader > 0) {
+            blockHeader = await this.getBlockHeader(heightOrBlockHeader);
+        }
+        if (blockHeader) {
+            const transactionMerkleRoot = await this.getTransactionMerkleRoot(hash, blockHeader.blockHeight);
+            if (transactionMerkleRoot !== blockHeader.merkleRoot) {
+                throw new Error(`Invalid merkle proof for given block height: ${hash}, ${blockHeader.blockHeight}`);
             }
         }
+        const raw = await this.socket.request('blockchain.transaction.get', hash);
         return this.transactionToPlain(raw, blockHeader);
+    }
+    async getTransactionMerkleRoot(hash, height) {
+        const proof = await this.socket.request('blockchain.transaction.get_merkle', hash, height);
+        let i = proof.pos;
+        let node = hexToBytes(hash).reverse();
+        for (const pairHash of proof.merkle) {
+            const pairNode = hexToBytes(pairHash).reverse();
+            const concatenated = new Uint8Array(i % 2 === 0
+                ? [...node, ...pairNode]
+                : [...pairNode, ...node]);
+            node = new Uint8Array(await crypto.subtle.digest('SHA-256', await crypto.subtle.digest('SHA-256', concatenated)));
+            i = Math.floor(i / 2);
+        }
+        return bytesToHex(node.reverse());
     }
     async getBlockHeader(height) {
         const raw = await this.socket.request('blockchain.block.header', height);
@@ -107,6 +126,71 @@ export class ElectrumApi {
             callback(this.blockHeaderToPlain(headerInfo.hex, headerInfo.height));
         });
     }
+    async getPeers() {
+        const peers = await this.socket.request('server.peers.subscribe');
+        return peers.map(peer => {
+            const ip = peer[0];
+            const host = peer[1];
+            let version = '';
+            let pruningLimit = undefined;
+            let tcp = null;
+            let ssl = null;
+            for (const meta of peer[2]) {
+                switch (meta.charAt(0)) {
+                    case 'v':
+                        version = meta.substring(1);
+                        break;
+                    case 'p':
+                        pruningLimit = Number.parseInt(meta.substring(1), 10);
+                        break;
+                    case 't':
+                        {
+                            if (meta.substring(1).length === 0) {
+                                switch (this.options.network || BitcoinJS.networks.bitcoin) {
+                                    case BitcoinJS.networks.testnet:
+                                        tcp = 60001;
+                                        break;
+                                    default:
+                                        tcp = 50001;
+                                        break;
+                                }
+                            }
+                            else {
+                                tcp = Number.parseInt(meta.substring(1), 10);
+                            }
+                        }
+                        break;
+                    case 's':
+                        {
+                            if (meta.substring(1).length === 0) {
+                                switch (this.options.network || BitcoinJS.networks.bitcoin) {
+                                    case BitcoinJS.networks.testnet:
+                                        ssl = 60002;
+                                        break;
+                                    default:
+                                        ssl = 50002;
+                                        break;
+                                }
+                            }
+                            else {
+                                ssl = Number.parseInt(meta.substring(1), 10);
+                            }
+                        }
+                        break;
+                }
+            }
+            return {
+                ip,
+                host,
+                version,
+                pruningLimit,
+                ports: {
+                    tcp,
+                    ssl,
+                },
+            };
+        });
+    }
     transactionToPlain(tx, plainHeader) {
         if (typeof tx === 'string')
             tx = BitcoinJS.Transaction.fromHex(tx);
@@ -123,7 +207,7 @@ export class ElectrumApi {
             blockHash: null,
             blockHeight: null,
             timestamp: null,
-            replaceByFee: inputs.some((input) => input.sequence < 0xfffffffe),
+            replaceByFee: inputs.some(input => input.sequence < 0xfffffffe),
         };
         if (plainHeader) {
             plain.blockHash = plainHeader.blockHash;
@@ -135,7 +219,7 @@ export class ElectrumApi {
     inputToPlain(input, index) {
         return {
             script: bytesToHex(input.script),
-            transactionHash: bytesToHex(input.hash.reverse()),
+            transactionHash: bytesToHex(new Uint8Array(input.hash).reverse()),
             address: this.deriveAddressFromInput(input) || null,
             witness: input.witness.map((buf) => {
                 if (typeof buf === 'number')
@@ -230,8 +314,8 @@ export class ElectrumApi {
             nonce: header.nonce,
             version: header.version,
             weight: header.weight(),
-            prevHash: header.prevHash ? bytesToHex(header.prevHash.reverse()) : null,
-            merkleRoot: header.merkleRoot ? bytesToHex(header.merkleRoot) : null,
+            prevHash: header.prevHash ? bytesToHex(new Uint8Array(header.prevHash).reverse()) : null,
+            merkleRoot: header.merkleRoot ? bytesToHex(new Uint8Array(header.merkleRoot).reverse()) : null,
         };
     }
     async addressToScriptHash(addr) {

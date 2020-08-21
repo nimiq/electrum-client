@@ -46,3 +46,13 @@ export declare type PlainBlockHeader = {
     prevHash: string | null;
     merkleRoot: string | null;
 };
+export declare type Peer = {
+    ip: string;
+    host: string;
+    version: string;
+    ports: {
+        tcp: number | null;
+        ssl: number | null;
+    };
+    pruningLimit?: number;
+};
