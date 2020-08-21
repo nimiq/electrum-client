@@ -51,3 +51,14 @@ export type PlainBlockHeader = {
     prevHash: string | null,
     merkleRoot: string | null,
 }
+
+export type Peer = {
+    ip: string,
+    host: string,
+    version: string,
+    ports: {
+        tcp: number | null,
+        ssl: number | null,
+    },
+    pruningLimit?: number,
+}

@@ -9,10 +9,12 @@
 </main>
 
 <script>
-	import { ElectrumApi } from '../..';
+	import { ElectrumApi, hexToBytes, bytesToHex } from '../..';
 
 	const electrum = new ElectrumApi();
 	window.electrum = electrum;
+	window.hexToBytes = hexToBytes;
+	window.bytesToHex = bytesToHex;
 
 	let head = null;
 	electrum.subscribeHeaders((header) => {
