@@ -235,7 +235,7 @@ export class ElectrumApi {
     inputToPlain(input: BitcoinJS.TxInput, index: number): PlainInput {
         return {
             script: bytesToHex(input.script),
-            transactionHash: bytesToHex(input.hash.reverse()),
+            transactionHash: bytesToHex(new Uint8Array(input.hash).reverse()),
             address: this.deriveAddressFromInput(input) || null,
             witness: input.witness.map((buf) => {
                 if (typeof buf === 'number') return buf;
@@ -354,8 +354,8 @@ export class ElectrumApi {
             nonce: header.nonce,
             version: header.version,
             weight: header.weight(),
-            prevHash: header.prevHash ? bytesToHex(header.prevHash.reverse()) : null,
-            merkleRoot: header.merkleRoot ? bytesToHex(header.merkleRoot) : null,
+            prevHash: header.prevHash ? bytesToHex(new Uint8Array(header.prevHash).reverse()) : null,
+            merkleRoot: header.merkleRoot ? bytesToHex(new Uint8Array(header.merkleRoot).reverse()) : null,
         };
     }
 
