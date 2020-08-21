@@ -14,6 +14,7 @@ import {
     PlainOutput,
     PlainTransaction,
     Receipt,
+    Peer,
 } from './types';
 
 export type ElectrumApiOptions = {
@@ -199,6 +200,60 @@ export class ElectrumApi {
     public async subscribeHeaders(callback: (header: PlainBlockHeader) => any) {
         this.socket.subscribe('blockchain.headers', async (headerInfo: {height: number, hex: string}) => {
             callback(this.blockHeaderToPlain(headerInfo.hex, headerInfo.height));
+        });
+    }
+
+    public async getPeers(): Promise<Peer[]> {
+        const peers: Array<[string, string, string[]]> = await this.socket.request('server.peers.subscribe');
+
+        return peers.map(peer => {
+            const ip = peer[0];
+            const host = peer[1];
+
+            let version: string = '';
+            let pruningLimit: number | undefined = undefined;
+            let tcp: number | null = null;
+            let ssl: number | null = null;
+
+            for (const meta of peer[2]) {
+                switch (meta.charAt(0)) {
+                    case 'v': version = meta.substring(1); break;
+                    case 'p': pruningLimit = Number.parseInt(meta.substring(1), 10); break;
+                    case 't': {
+                        if (meta.substring(1).length === 0) {
+                            // An omitted port number means default port
+                            switch (this.options.network || BitcoinJS.networks.bitcoin) {
+                                case BitcoinJS.networks.testnet: tcp = 60001; break;
+                                default: tcp = 50001; break; // mainnet (bitcoin) and regtest
+                            }
+                        } else {
+                            tcp = Number.parseInt(meta.substring(1), 10);
+                        }
+                    } break;
+                    case 's': {
+                        if (meta.substring(1).length === 0) {
+                            // An omitted port number means default port
+                            switch (this.options.network || BitcoinJS.networks.bitcoin) {
+                                case BitcoinJS.networks.testnet: ssl = 60002; break;
+                                default: ssl = 50002; break; // mainnet (bitcoin) and regtest
+                            }
+                        } else {
+                            ssl = Number.parseInt(meta.substring(1), 10);
+                        }
+                    } break;
+                }
+            }
+
+            return {
+                ip,
+                host,
+                version,
+                pruningLimit,
+                ports: {
+                    tcp,
+                    ssl,
+                },
+            };
         });
     }
 
