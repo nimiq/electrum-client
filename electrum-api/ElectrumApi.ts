@@ -4,6 +4,7 @@ import {
     ElectrumWS,
     ElectrumWSOptions,
     bytesToHex,
+    hexToBytes,
 } from '../electrum-ws/index';
 
 import {
@@ -93,23 +94,22 @@ export class ElectrumApi {
             if (knownTx && knownTx.blockHeight === Math.max(blockHeight, 0)) continue; // Ignore blockHeights of -1
 
             try {
-                const tx = await this.getTransaction(transactionHash);
-
                 let blockHeader = blockHeaders.get(blockHeight);
                 if (!blockHeader && blockHeight > 0) {
                     blockHeader = await this.getBlockHeader(blockHeight);
                     blockHeaders.set(blockHeight, blockHeader);
                 }
 
-                if (blockHeader) {
-                    tx.blockHeight = blockHeight;
-                    tx.timestamp = blockHeader.timestamp;
-                    tx.blockHash = blockHeader.blockHash;
+                try {
+                    // Validates merkle proof and includes block data in plain transaction
+                    const tx = await this.getTransaction(transactionHash, blockHeader);
+                    txs.push(tx);
+                } catch (error) {
+                    console.warn(error);
+                    continue;
                 }
-
-                txs.push(tx);
             } catch (error) {
-                console.error(error);
+                console.warn(error);
                 return txs;
             }
         }
@@ -117,19 +117,56 @@ export class ElectrumApi {
         return txs;
     }
 
-    public async getTransaction(hash: string, height?: number): Promise<PlainTransaction> {
-        const raw: string = await this.socket.request('blockchain.transaction.get', hash);
-
+    public async getTransaction(hash: string, heightOrBlockHeader?: number | PlainBlockHeader): Promise<PlainTransaction> {
         let blockHeader;
-        if (typeof height === 'number' && height > 0) {
-            try {
-                blockHeader = await this.getBlockHeader(height);
-            } catch (error) {
-                console.error(error);
+        if (typeof heightOrBlockHeader === 'object') {
+            blockHeader = heightOrBlockHeader;
+        } else if (typeof heightOrBlockHeader === 'number' && heightOrBlockHeader > 0) {
+            blockHeader = await this.getBlockHeader(heightOrBlockHeader);
+        }
+
+        if (blockHeader) {
+            // Proof transaction
+            const transactionMerkleRoot = await this.getTransactionMerkleRoot(hash, blockHeader.blockHeight);
+            if (transactionMerkleRoot !== blockHeader.merkleRoot) {
+                throw new Error(`Invalid merkle proof for given block height: ${hash}, ${blockHeader.blockHeight}`);
             }
         }
 
+        const raw: string = await this.socket.request('blockchain.transaction.get', hash);
+
         return this.transactionToPlain(raw, blockHeader);
+    }
+
+    public async getTransactionMerkleRoot(hash: string, height: number): Promise<string> {
+        type MerkleProof = {
+            block_height: number;
+            merkle: string[],
+            pos: number,
+        };
+
+        const proof: MerkleProof = await this.socket.request('blockchain.transaction.get_merkle', hash, height);
+
+        // All hashes that we have (tx hash and merkle path hashes) are in little-endian byte order and must be reversed into big-endian as we go along
+        let i = proof.pos;
+        let node = hexToBytes(hash).reverse();
+        for (const pairHash of proof.merkle) {
+            const pairNode = hexToBytes(pairHash).reverse();
+
+            const concatenated = new Uint8Array(i % 2 === 0
+                ? [...node, ...pairNode] // even index
+                : [...pairNode, ...node] // uneven index
+            );
+
+            // Double SHA256 hash
+            node = new Uint8Array(await crypto.subtle.digest('SHA-256', await crypto.subtle.digest('SHA-256', concatenated)));
+
+            // Update index for the next tree level
+            i = Math.floor(i / 2);
+        }
+
+        // Reverse back into little-endian byte order
+        return bytesToHex(node.reverse());
     }
 
     public async getBlockHeader(height: number): Promise<PlainBlockHeader> {
@@ -142,14 +179,14 @@ export class ElectrumApi {
         return this.socket.request('mempool.get_fee_histogram');
     }
 
-    async broadcastTransaction(rawTx: string): Promise<PlainTransaction> {
+    public async broadcastTransaction(rawTx: string): Promise<PlainTransaction> {
         const tx = this.transactionToPlain(rawTx);
         const hash = await this.socket.request('blockchain.transaction.broadcast', rawTx);
         if (hash === tx.transactionHash) return tx;
         else throw new Error(hash); // Protocol v1.0 returns errors as the result string
     }
 
-    async subscribeReceipts(address: string, callback: (receipts: Receipt[]) => any) {
+    public async subscribeReceipts(address: string, callback: (receipts: Receipt[]) => any) {
         this.socket.subscribe(
             'blockchain.scripthash',
             async (scriptHash: string, status: string | null) => {
@@ -159,7 +196,7 @@ export class ElectrumApi {
         );
     }
 
-    async subscribeHeaders(callback: (header: PlainBlockHeader) => any) {
+    public async subscribeHeaders(callback: (header: PlainBlockHeader) => any) {
         this.socket.subscribe('blockchain.headers', async (headerInfo: {height: number, hex: string}) => {
             callback(this.blockHeaderToPlain(headerInfo.hex, headerInfo.height));
         });
@@ -183,7 +220,7 @@ export class ElectrumApi {
             blockHeight: null,
             timestamp: null,
             // Sequence constant from https://github.com/bitcoin/bips/blob/master/bip-0125.mediawiki#summary
-            replaceByFee: inputs.some((input) => input.sequence < 0xfffffffe),
+            replaceByFee: inputs.some(input => input.sequence < 0xfffffffe),
         };
 
         if (plainHeader) {
