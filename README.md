@@ -88,7 +88,7 @@ const electrum = new ElectrumApi({
     /**
      * Which Bitcoin network to use to encode and decode addresses.
      * Can be either a BitcoinJS.Network object or either of
-     * 'bitcoin' | 'testnet' | 'regtest'.
+     * 'bitcoin' | 'testnet'.
      *
      * [optional]
      * Default: BitcoinJS.network.bitcoin

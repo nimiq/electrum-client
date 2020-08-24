@@ -230,7 +230,7 @@ export class ElectrumApi {
                             // An omitted port number means default port
                             switch (this.options.network || BitcoinJS.networks.bitcoin) {
                                 case BitcoinJS.networks.testnet: tcp = 60001; break;
-                                default: tcp = 50001; break; // mainnet (bitcoin) and regtest
+                                default: tcp = 50001; break; // mainnet (bitcoin)
                             }
                         } else {
                             tcp = Number.parseInt(meta.substring(1), 10);
@@ -241,7 +241,7 @@ export class ElectrumApi {
                             // An omitted port number means default port
                             switch (this.options.network || BitcoinJS.networks.bitcoin) {
                                 case BitcoinJS.networks.testnet: ssl = 60002; break;
-                                default: ssl = 50002; break; // mainnet (bitcoin) and regtest
+                                default: ssl = 50002; break; // mainnet (bitcoin)
                             }
                         } else {
                             ssl = Number.parseInt(meta.substring(1), 10);
@@ -252,7 +252,7 @@ export class ElectrumApi {
                             // An omitted port number means default port
                             switch (this.options.network || BitcoinJS.networks.bitcoin) {
                                 case BitcoinJS.networks.testnet: wss = 60004; break;
-                                default: wss = 50004; break; // mainnet (bitcoin) and regtest
+                                default: wss = 50004; break; // mainnet (bitcoin)
                             }
                         } else {
                             wss = Number.parseInt(meta.substring(1), 10);
