@@ -14,6 +14,7 @@ import {
     PlainOutput,
     PlainTransaction,
     Receipt,
+    PeerFeatures,
     Peer,
 } from './types';
 
@@ -29,7 +30,7 @@ export class ElectrumApi {
     private options: ElectrumApiOptions;
     private socket: ElectrumWS;
 
-    constructor(options: Omit<ElectrumApiOptions, 'network'> & { network?: 'bitcoin' | 'testnet' | 'regtest' | BitcoinJS.Network } = {}) {
+    constructor(options: Omit<ElectrumApiOptions, 'network'> & { network?: 'bitcoin' | 'testnet' | BitcoinJS.Network } = {}) {
         if (typeof options.network === 'string') {
             options.network = BitcoinJS.networks[options.network];
         }
@@ -203,6 +204,10 @@ export class ElectrumApi {
         });
     }
 
+    public async getFeatures(): Promise<PeerFeatures> {
+        return this.socket.request('server.features');
+    }
+
     public async getPeers(): Promise<Peer[]> {
         const peers: Array<[string, string, string[]]> = await this.socket.request('server.peers.subscribe');
 
@@ -214,6 +219,7 @@ export class ElectrumApi {
             let pruningLimit: number | undefined = undefined;
             let tcp: number | null = null;
             let ssl: number | null = null;
+            let wss: number | null = null;
 
             for (const meta of peer[2]) {
                 switch (meta.charAt(0)) {
@@ -241,6 +247,17 @@ export class ElectrumApi {
                             ssl = Number.parseInt(meta.substring(1), 10);
                         }
                     } break;
+                    case 'w': {
+                        if (meta.substring(1).length === 0) {
+                            // An omitted port number means default port
+                            switch (this.options.network || BitcoinJS.networks.bitcoin) {
+                                case BitcoinJS.networks.testnet: wss = 60004; break;
+                                default: wss = 50004; break; // mainnet (bitcoin) and regtest
+                            }
+                        } else {
+                            wss = Number.parseInt(meta.substring(1), 10);
+                        }
+                    } break;
                 }
             }
 
@@ -252,6 +269,7 @@ export class ElectrumApi {
                 ports: {
                     tcp,
                     ssl,
+                    wss,
                 },
             };
         });

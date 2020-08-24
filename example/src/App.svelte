@@ -9,15 +9,20 @@
 </main>
 
 <script>
-	import { ElectrumApi, hexToBytes, bytesToHex } from '../..';
+	import { Agent, GenesisConfig } from '../..';
+	import { hexToBytes, bytesToHex } from '../..';
 
-	const electrum = new ElectrumApi();
-	window.electrum = electrum;
 	window.hexToBytes = hexToBytes;
 	window.bytesToHex = bytesToHex;
 
+	GenesisConfig.mainnet();
+
+	const peer = GenesisConfig.SEED_PEERS[Math.floor(Math.random() * GenesisConfig.SEED_PEERS.length)];
+	const agent = new Agent(peer);
+	window.agent = agent;
+
 	let head = null;
-	electrum.subscribeHeaders((header) => {
+	agent.on('head-change', (header) => {
 		head = header;
 	});
 

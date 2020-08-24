@@ -52,6 +52,20 @@ export type PlainBlockHeader = {
     merkleRoot: string | null,
 }
 
+export type PeerFeatures = {
+    hosts: {[hostname: string]: {
+        tcp_port: number | null,
+        ssl_port: number | null,
+        wss_port: number | null,
+    }},
+    genesis_hash: string,
+    hash_function: string,
+    server_version: string,
+    protocol_max: string,
+    protocol_min: string,
+    pruning: number | null,
+}
+
 export type Peer = {
     ip: string,
     host: string,
@@ -59,6 +73,7 @@ export type Peer = {
     ports: {
         tcp: number | null,
         ssl: number | null,
+        wss: number | null,
     },
     pruningLimit?: number,
 }
