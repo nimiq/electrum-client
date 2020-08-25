@@ -19,6 +19,7 @@
 
 	const peer = GenesisConfig.SEED_PEERS[Math.floor(Math.random() * GenesisConfig.SEED_PEERS.length)];
 	const agent = new Agent(peer);
+	const synced = agent.sync();
 	window.agent = agent;
 
 	let head = null;

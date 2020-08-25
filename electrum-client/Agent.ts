@@ -1,10 +1,11 @@
 import { ElectrumApi } from '../electrum-api/ElectrumApi';
 import { Observable } from './Observable';
-import { PlainBlockHeader, Peer } from '../electrum-api/types';
+import { PlainBlockHeader, Peer, Receipt } from '../electrum-api/types';
 import { GenesisConfig, Network } from './GenesisConfig';
 
 export enum Event {
     HEAD_CHANGE = 'head-change',
+    TRANSACTION = 'transaction',
 }
 
 export class Agent extends Observable {
@@ -12,6 +13,7 @@ export class Agent extends Observable {
     private syncing = false;
     private synced = false;
     private orphanedBlocks: PlainBlockHeader[] = [];
+    private knownReceipts = new Map</* address */ string, Map</* transactionHash */ string, Receipt>>();
 
     constructor(peer: Peer) {
         super();
@@ -46,25 +48,80 @@ export class Agent extends Observable {
         } else {
             throw new Error('No suitable connection protocol and port for peer');
         }
-
-        this.sync();
     }
 
-    public get api() {
-        if (!this.connection) {
-            throw new Error('Agent not connected');
-        }
-        return this.connection;
-    }
-
-    private async sync() {
+    public async sync() {
         if (this.syncing || this.synced) return;
         this.syncing = true;
 
         await this.handshake();
         if (!this.connection) return;
 
-        await this.requestHead();
+        const promise = new Promise<boolean>((resolve, reject) => {
+            this.once(Event.HEAD_CHANGE, () => resolve(this.synced));
+            // setTimeout(reject, 10 * 1000);
+        });
+
+        this.requestHead();
+
+        return promise;
+    }
+
+    public async getBalance(address: string) {
+        if (!this.synced) throw new Error('Agent not synced');
+        // TODO: Apply timeout
+        return this.connection!.getBalance(address);
+    }
+
+    public async getTransactionReceipts(address: string) {
+        if (!this.synced) throw new Error('Agent not synced');
+        // TODO: Apply timeout
+        return this.connection!.getReceipts(address);
+    }
+
+    public async getTransactionHistory(address: string, sinceBlockHeight = 0, knownReceipts = [] as Receipt[], limit = Infinity) {
+        if (!this.synced) throw new Error('Agent not synced');
+        // TODO: Apply timeout
+        return this.connection!.getHistory(address, sinceBlockHeight, knownReceipts, limit);
+    }
+
+    public async getTransaction(hash: string, height?: number) {
+        if (!this.synced) throw new Error('Agent not synced');
+        // TODO: Apply timeout
+        return this.connection!.getTransaction(hash, height);
+    }
+
+    public async getBlockHeader(height: number) {
+        if (!this.synced) throw new Error('Agent not synced');
+        // TODO: Apply timeout
+        return this.connection!.getBlockHeader(height);
+    }
+
+    public async getFeeHistogram() {
+        if (!this.synced) throw new Error('Agent not synced');
+        // TODO: Apply timeout
+        return this.connection!.getFeeHistogram();
+    }
+
+    public async broadcastTransaction(rawTx: string) {
+        if (!this.synced) throw new Error('Agent not synced');
+        // TODO: Apply timeout
+        return this.connection!.broadcastTransaction(rawTx);
+    }
+
+    public async subscribe(addresses: string | string[]) {
+        if (!this.synced) throw new Error('Agent not synced');
+        if (typeof addresses === 'string') addresses = [addresses];
+        for (const address of addresses) {
+            // TODO: Apply timeout
+            return this.connection!.subscribeReceipts(address, (receipts: Receipt[]) => this.onReceipts(address, receipts));
+        }
+    }
+
+    public async getPeers() {
+        if (!this.synced) throw new Error('Agent not synced');
+        // TODO: Apply timeout
+        return this.connection!.getPeers();
     }
 
     private async handshake() {
@@ -94,6 +151,29 @@ export class Agent extends Observable {
             this.synced = true;
         }
         this.fire(Event.HEAD_CHANGE, header);
+    }
+
+    private onReceipts(address: string, receipts: Receipt[]) {
+        if (!this.knownReceipts.has(address)) {
+            // This is the initial callback after subscribing and is used to store the current state
+            this.knownReceipts.set(address, new Map(receipts.map(receipt => [receipt.transactionHash, receipt])));
+            return;
+        }
+
+        const knownReceipts = this.knownReceipts.get(address)!;
+
+        // Check which receipts have changed and request those transactions
+        for (const receipt of receipts) {
+            const knownReceipt = knownReceipts.get(receipt.transactionHash);
+            if (knownReceipt && knownReceipt.blockHeight === receipt.blockHeight) continue;
+
+            // TODO: Use already received block headers if available, use already received transactions if available
+            //       (requires block and transaction store) to reduce network requests
+
+            // TODO: Differentiate between 'transaction-added' and 'transaction-mined'? If not here, somewhere else?
+
+            this.connection!.getTransaction(receipt.transactionHash, receipt.blockHeight).then(tx => this.fire(Event.TRANSACTION, tx));
+        }
     }
 
     private close() {

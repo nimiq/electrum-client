@@ -8,6 +8,13 @@ export class Observable {
         return this.listeners.get(event)!.push(callback) - 1;
     }
 
+    public once(event: string, callback: Function) {
+        const id = this.on(event, (...params: any[]) => {
+            this.off(event, id);
+            callback(...params);
+        });
+    }
+
     public off(event: string, id: number) {
         const callbacks = this.listeners.get(event);
         if (!callbacks || callbacks.length < id + 1) return;

@@ -49,9 +49,14 @@ export class ElectrumApi {
         return this.socket.request('blockchain.scripthash.get_balance', await this.addressToScriptHash(address));
     }
 
-    public async getReceipts(address: string, isScriptHash = false): Promise<Receipt[]> {
+    public async getReceipts(addressOrScriptHash: string): Promise<Receipt[]> {
         const receipts: Array<{height: number, tx_hash: string, fee?: number}> =
-            await this.socket.request('blockchain.scripthash.get_history', isScriptHash ? address : await this.addressToScriptHash(address));
+            await this.socket.request(
+                'blockchain.scripthash.get_history',
+                addressOrScriptHash.length === 64
+                    ? addressOrScriptHash
+                    : await this.addressToScriptHash(addressOrScriptHash),
+            );
 
         return receipts.map((r) => ({
             blockHeight: r.height,
@@ -131,7 +136,7 @@ export class ElectrumApi {
             // Proof transaction
             const transactionMerkleRoot = await this.getTransactionMerkleRoot(hash, blockHeader.blockHeight);
             if (transactionMerkleRoot !== blockHeader.merkleRoot) {
-                throw new Error(`Invalid merkle proof for given block height: ${hash}, ${blockHeader.blockHeight}`);
+                throw new Error(`Invalid transaction merkle proof for block height: ${hash}, ${blockHeader.blockHeight}`);
             }
         }
 
@@ -148,6 +153,10 @@ export class ElectrumApi {
         };
 
         const proof: MerkleProof = await this.socket.request('blockchain.transaction.get_merkle', hash, height);
+
+        if (proof.block_height !== height) {
+            throw new Error('Invalid reference block height received in transaction merkle proof');
+        }
 
         // All hashes that we have (tx hash and merkle path hashes) are in little-endian byte order and must be reversed into big-endian as we go along
         let i = proof.pos;
@@ -192,7 +201,7 @@ export class ElectrumApi {
         this.socket.subscribe(
             'blockchain.scripthash',
             async (scriptHash: string, status: string | null) => {
-                callback(!status ? [] : await this.getReceipts(scriptHash, true));
+                callback(!status ? [] : await this.getReceipts(scriptHash));
             },
             await this.addressToScriptHash(address),
         );
