@@ -1,5 +1,18 @@
 import { stringToBytes, bytesToString } from "./helpers";
 
+type RpcResponse = {
+    jsonrpc: string,
+    result?: any,
+    error?: string,
+    id: number,
+}
+
+type RpcRequest = {
+    jsonrpc: string,
+    method: string,
+    params?: any[],
+}
+
 export type ElectrumWSOptions = {
     proxy: boolean,
     token?: string,
@@ -22,6 +35,7 @@ export class ElectrumWS {
     private connectedRejector!: () => void;
 
     private pingInterval: number = -1;
+    private incompleteMessage = '';
 
     public ws!: WebSocket;
 
@@ -133,7 +147,8 @@ export class ElectrumWS {
         const lines = raw.split('\n').filter(line => line.length > 0);
 
         for (const line of lines) {
-            const response = JSON.parse(line);
+            const response = this.parseLine(line);
+            if (!response) continue;
             console.debug('ElectrumWS MSG:', response);
 
             if ('id' in response && this.requests.has(response.id)) {
@@ -146,7 +161,7 @@ export class ElectrumWS {
 
             if ('method' in response && /** @type {string} */ (response.method).endsWith('subscribe')) {
                 const method = response.method.replace('.subscribe', '');
-                const params = response.params;
+                const params = response.params || [];
                 // If first parameter is a string (for scripthash subscriptions), it's part of the subscription key.
                 // If first parameter is an object (for header subscriptions), it's not.
                 const subscriptionKey = `${method}${typeof params[0] === 'string' ? `-${params[0]}` : ''}`;
@@ -156,6 +171,25 @@ export class ElectrumWS {
                 }
             }
         }
+    }
+
+    private parseLine(line: string): RpcResponse | RpcRequest | false {
+        try {
+            // console.debug('Parsing JSON:', line);
+            const parsed = JSON.parse(line);
+            this.incompleteMessage = '';
+            return parsed;
+        } catch (error) {
+            // Ignore
+        }
+
+        if (this.incompleteMessage && !line.includes(this.incompleteMessage)) {
+            return this.parseLine(`${this.incompleteMessage}${line}`);
+        }
+
+        // console.debug('Failed to parse JSON, retrying together with next message');
+        this.incompleteMessage = line;
+        return false;
     }
 
     private onError(event: Event) {
