@@ -11,9 +11,11 @@
 <script>
 	import { Agent, GenesisConfig } from '../..';
 	import { hexToBytes, bytesToHex } from '../..';
+	import { BlockStore } from '../..';
 
 	window.hexToBytes = hexToBytes;
 	window.bytesToHex = bytesToHex;
+	window.BlockStore = BlockStore;
 
 	GenesisConfig.mainnet();
 
@@ -23,7 +25,7 @@
 	window.agent = agent;
 
 	let head = null;
-	agent.on('head-change', (header) => {
+	agent.on('block', (header) => {
 		head = header;
 	});
 

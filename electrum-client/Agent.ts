@@ -2,9 +2,10 @@ import { ElectrumApi } from '../electrum-api/ElectrumApi';
 import { Observable } from './Observable';
 import { PlainBlockHeader, Peer, Receipt } from '../electrum-api/types';
 import { GenesisConfig, Network } from './GenesisConfig';
+import { /* TransactionStore, */ BlockStore } from './Stores';
 
 export enum Event {
-    HEAD_CHANGE = 'head-change',
+    BLOCK = 'block',
     TRANSACTION = 'transaction',
 }
 
@@ -58,7 +59,7 @@ export class Agent extends Observable {
         if (!this.connection) return;
 
         const promise = new Promise<boolean>((resolve, reject) => {
-            this.once(Event.HEAD_CHANGE, () => resolve(this.synced));
+            this.once(Event.BLOCK, () => resolve(this.synced));
             // setTimeout(reject, 10 * 1000);
         });
 
@@ -124,6 +125,22 @@ export class Agent extends Observable {
         return this.connection!.getPeers();
     }
 
+    public on(event: Event, callback: Function) {
+        return super.on(event, callback);
+    }
+
+    public once(event: Event, callback: Function) {
+        return super.once(event, callback);
+    }
+
+    public off(event: Event, id: number) {
+        return super.off(event, id);
+    }
+
+    public allOff(event: Event) {
+        return super.allOff(event);
+    }
+
     private async handshake() {
         if (!this.connection) {
             throw new Error('Agent not connected');
@@ -142,15 +159,27 @@ export class Agent extends Observable {
         if (!this.connection) {
             throw new Error('Agent not connected');
         }
-        this.connection.subscribeHeaders(this.onHeader.bind(this));
+        this.connection.subscribeHeaders(this.onBlock.bind(this));
     }
 
-    private onHeader(header: PlainBlockHeader) {
+    private async onBlock(block: PlainBlockHeader) {
         if (this.syncing) {
             this.syncing = false;
             this.synced = true;
         }
-        this.fire(Event.HEAD_CHANGE, header);
+
+        // TODO: Move into Client
+        let prevBlock = BlockStore.get(block.blockHeight - 1);
+        if (!prevBlock && block.blockHeight > 0) {
+            prevBlock = await this.connection!.getBlockHeader(block.blockHeight - 1);
+            BlockStore.set(prevBlock.blockHeight, prevBlock);
+        }
+        if (!prevBlock || prevBlock.blockHash === block.prevHash) {
+            BlockStore.set(block.blockHeight, block);
+            this.fire(Event.BLOCK, block);
+        } else {
+            console.warn('Agent: Received non-consecutive block:', block);
+        }
     }
 
     private onReceipts(address: string, receipts: Receipt[]) {
@@ -167,12 +196,13 @@ export class Agent extends Observable {
             const knownReceipt = knownReceipts.get(receipt.transactionHash);
             if (knownReceipt && knownReceipt.blockHeight === receipt.blockHeight) continue;
 
-            // TODO: Use already received block headers if available, use already received transactions if available
-            //       (requires block and transaction store) to reduce network requests
+            // TODO: Use already received transactions if available to reduce network requests
+            // const storedTransaction = TransactionStore.get(receipt.transactionHash);
+            const storedBlock = BlockStore.get(receipt.blockHeight);
 
             // TODO: Differentiate between 'transaction-added' and 'transaction-mined'? If not here, somewhere else?
 
-            this.connection!.getTransaction(receipt.transactionHash, receipt.blockHeight).then(tx => this.fire(Event.TRANSACTION, tx));
+            this.connection!.getTransaction(receipt.transactionHash, storedBlock || receipt.blockHeight).then(tx => this.fire(Event.TRANSACTION, tx));
         }
     }
 
