@@ -10,6 +10,8 @@ const {
     Block,
 } = require('bitcoinjs-lib');
 
+const { Buffer } = require('buffer');
+
 module.exports = {
     Network,
     networks,
@@ -20,4 +22,5 @@ module.exports = {
     script,
     payments,
     Block,
+    Buffer,
 };

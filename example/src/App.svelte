@@ -10,11 +10,13 @@
 
 <script>
 	import { Agent, GenesisConfig } from '../..';
-	import { hexToBytes, bytesToHex } from '../..';
+	import { hexToBytes, bytesToHex, transactionToPlain, transactionFromPlain } from '../..';
 	import { BlockStore } from '../..';
 
 	window.hexToBytes = hexToBytes;
 	window.bytesToHex = bytesToHex;
+	window.transactionToPlain = transactionToPlain;
+	window.transactionFromPlain = transactionFromPlain;
 	window.BlockStore = BlockStore;
 
 	GenesisConfig.mainnet();

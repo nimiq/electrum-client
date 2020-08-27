@@ -21,7 +21,7 @@ export type PlainInput = {
 
 export type PlainOutput = {
     script: string,
-    address: string,
+    address: string | null,
     value: number,
     index: number,
 }
@@ -34,6 +34,7 @@ export type PlainTransaction = {
     vsize: number,
     isCoinbase: boolean,
     weight: number,
+    locktime: number,
     blockHash: string | null,
     blockHeight: number | null,
     timestamp: number | null,

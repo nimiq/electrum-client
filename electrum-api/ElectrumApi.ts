@@ -10,13 +10,17 @@ import {
 import {
     Balance,
     PlainBlockHeader,
-    PlainInput,
-    PlainOutput,
     PlainTransaction,
     Receipt,
     PeerFeatures,
     Peer,
 } from './types';
+
+import {
+    transactionToPlain,
+    setBlockOnTransaction,
+    blockHeaderToPlain,
+} from './helpers';
 
 export type ElectrumApiOptions = {
     endpoint?: string,
@@ -142,7 +146,8 @@ export class ElectrumApi {
 
         const raw: string = await this.socket.request('blockchain.transaction.get', hash);
 
-        return this.transactionToPlain(raw, blockHeader);
+        const tx = transactionToPlain(raw);
+        return blockHeader ? setBlockOnTransaction(tx, blockHeader) : tx;
     }
 
     public async getTransactionMerkleRoot(hash: string, height: number): Promise<string> {
@@ -183,7 +188,7 @@ export class ElectrumApi {
     public async getBlockHeader(height: number): Promise<PlainBlockHeader> {
         const raw: string = await this.socket.request('blockchain.block.header', height);
 
-        return this.blockHeaderToPlain(raw, height);
+        return blockHeaderToPlain(raw, height);
     }
 
     public async getFeeHistogram(): Promise<Array<[number, number]>> {
@@ -191,7 +196,7 @@ export class ElectrumApi {
     }
 
     public async broadcastTransaction(rawTx: string): Promise<PlainTransaction> {
-        const tx = this.transactionToPlain(rawTx);
+        const tx = transactionToPlain(rawTx);
         const hash = await this.socket.request('blockchain.transaction.broadcast', rawTx);
         if (hash === tx.transactionHash) return tx;
         else throw new Error(hash); // Protocol v1.0 returns errors as the result string
@@ -209,7 +214,7 @@ export class ElectrumApi {
 
     public async subscribeHeaders(callback: (header: PlainBlockHeader) => any) {
         this.socket.subscribe('blockchain.headers', async (headerInfo: {height: number, hex: string}) => {
-            callback(this.blockHeaderToPlain(headerInfo.hex, headerInfo.height));
+            callback(blockHeaderToPlain(headerInfo.hex, headerInfo.height));
         });
     }
 
@@ -283,164 +288,6 @@ export class ElectrumApi {
             };
         });
     }
-
-    transactionToPlain(tx: string | BitcoinJS.Transaction, plainHeader?: PlainBlockHeader): PlainTransaction {
-        if (typeof tx === 'string') tx = BitcoinJS.Transaction.fromHex(tx);
-
-        const inputs = tx.ins.map((input: BitcoinJS.TxInput, index: number) => this.inputToPlain(input, index));
-        const outputs = tx.outs.map((output: BitcoinJS.TxOutput, index: number) => this.outputToPlain(output, index));
-
-        const plain: PlainTransaction = {
-            transactionHash: tx.getId(),
-            inputs,
-            outputs,
-            version: tx.version,
-            vsize: tx.virtualSize(),
-            isCoinbase: tx.isCoinbase(),
-            weight: tx.weight(),
-            blockHash: null,
-            blockHeight: null,
-            timestamp: null,
-            // Sequence constant from https://github.com/bitcoin/bips/blob/master/bip-0125.mediawiki#summary
-            replaceByFee: inputs.some(input => input.sequence < 0xfffffffe),
-        };
-
-        if (plainHeader) {
-            plain.blockHash = plainHeader.blockHash;
-            plain.blockHeight = plainHeader.blockHeight;
-            plain.timestamp = plainHeader.timestamp;
-        }
-
-        return plain;
-    }
-
-    inputToPlain(input: BitcoinJS.TxInput, index: number): PlainInput {
-        return {
-            script: bytesToHex(input.script),
-            transactionHash: bytesToHex(new Uint8Array(input.hash).reverse()),
-            address: this.deriveAddressFromInput(input) || null,
-            witness: input.witness.map((buf) => {
-                if (typeof buf === 'number') return buf;
-                return bytesToHex(buf);
-            }),
-            index,
-            outputIndex: input.index,
-            sequence: input.sequence,
-        };
-    }
-
-    outputToPlain(output: BitcoinJS.TxOutput, index: number): PlainOutput {
-        return {
-            script: bytesToHex(output.script),
-            address: BitcoinJS.address.fromOutputScript(output.script, this.options.network),
-            value: output.value,
-            index,
-        };
-    }
-
-    deriveAddressFromInput(input: BitcoinJS.TxInput): string | undefined {
-        const chunks = (BitcoinJS.script.decompile(input.script) || []) as Buffer[];
-        const witness = input.witness;
-
-        // Legacy addresses P2PKH (1...)
-        // a4453c9e224a0927f2909e49e3a97b31b5aa74a42d99de8cfcdaf293cb2ecbb7 0,1
-        if (chunks.length === 2 && witness.length === 0) {
-            return BitcoinJS.payments.p2pkh({
-                pubkey: chunks[1],
-                network: this.options.network,
-            }).address;
-        }
-
-        // Nested SegWit P2SH(P2WPKH) (3...)
-        // 6f4e12fa9e869c8721f2d747e042ff80f51c6757277df1563b54d4e9c9454ba0 0,1,2
-        if (chunks.length === 1	&& witness.length === 2) {
-            return BitcoinJS.payments.p2sh({
-                redeem: BitcoinJS.payments.p2wpkh({
-                    pubkey: witness[1],
-                    network: this.options.network,
-                }),
-            }).address;
-        }
-
-        // Native SegWit P2WPKH (bc1...)
-        // 3c89e220db701fed2813e0af033610044bc508d2de50cb4c420b8f3ad2d72c5c 0
-        if (chunks.length === 0 && witness.length === 2) {
-            return BitcoinJS.payments.p2wpkh({
-                pubkey: witness[1],
-                network: this.options.network,
-            }).address;
-        }
-
-        // Legacy MultiSig P2SH(P2MS) (3...)
-        // 80975cddebaa93aa21a6477c0d050685d6820fa1068a2731db0f39b535cbd369 0,1,2
-        if (chunks.length > 2 && witness.length === 0) {
-            const m = chunks.length - 2; // Number of signatures
-            const pubkeys = BitcoinJS.script.decompile(chunks[chunks.length - 1])!
-                .filter((n: number | Buffer) => typeof n !== 'number') as Buffer[];
-
-            return BitcoinJS.payments.p2sh({
-                redeem: BitcoinJS.payments.p2ms({
-                    m,
-                    pubkeys,
-                    network: this.options.network,
-                }),
-            }).address;
-        }
-
-        // Nested SegWit MultiSig P2SH(P2WSH(P2MS)) (3...)
-        // 80975cddebaa93aa21a6477c0d050685d6820fa1068a2731db0f39b535cbd369 3
-        if (chunks.length === 1 && witness.length > 2) {
-            const m = witness.length - 2; // Number of signatures
-            const pubkeys = BitcoinJS.script.decompile(witness[witness.length - 1])!
-                .filter((n: number | Uint8Array) => typeof n !== 'number') as Buffer[];
-
-            return BitcoinJS.payments.p2sh({
-                redeem: BitcoinJS.payments.p2wsh({
-                    redeem: BitcoinJS.payments.p2ms({
-                        m,
-                        pubkeys,
-                        network: this.options.network,
-                    }),
-                }),
-            }).address;
-        }
-
-        // Native SegWit MultiSig P2WSH(P2MS) (bc1...)
-        // 54a3e33efff4c508fa5c8ce7ccf4b08538a8fd2bf808b97ae51c21cf83df2dd1 0
-        if (chunks.length === 0 && witness.length > 2) {
-            const m = witness.length - 2; // Number of signatures
-            const pubkeys = BitcoinJS.script.decompile(witness[witness.length - 1])!
-                .filter((n: number | Uint8Array) => typeof n !== 'number') as Buffer[];
-
-            return BitcoinJS.payments.p2wsh({
-                redeem: BitcoinJS.payments.p2ms({
-                    m,
-                    pubkeys,
-                    network: this.options.network,
-                }),
-            }).address;
-        }
-
-        console.error(new Error('Cannot decode address from input'));
-        return undefined;
-    }
-
-    blockHeaderToPlain(header: string | BitcoinJS.Block, height: number): PlainBlockHeader {
-        if (typeof header === 'string') header = BitcoinJS.Block.fromHex(header);
-
-        return {
-            blockHash: header.getId(),
-            blockHeight: height,
-            timestamp: header.timestamp,
-            bits: header.bits,
-            nonce: header.nonce,
-            version: header.version,
-            weight: header.weight(),
-            prevHash: header.prevHash ? bytesToHex(new Uint8Array(header.prevHash).reverse()) : null,
-            merkleRoot: header.merkleRoot ? bytesToHex(new Uint8Array(header.merkleRoot).reverse()) : null,
-        };
-    }
-
 
     private async addressToScriptHash(addr: string) {
         const outputScript = BitcoinJS.address.toOutputScript(addr, this.options.network);
