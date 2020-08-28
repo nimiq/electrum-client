@@ -14,7 +14,7 @@ import {
     TransactionDetails,
 } from './types';
 import { BlockStore, TransactionStore } from './Stores';
-import { GenesisConfig } from './GenesisConfig';
+import { GenesisConfig, Network } from './GenesisConfig';
 
 type ElectrumClientOptions = {
     requiredBlockConfirmations: number,
@@ -42,6 +42,9 @@ export class ElectrumClient {
             requiredBlockConfirmations: 6,
             ...options,
         };
+
+        // Seed addressbook
+        this.addPeers(GenesisConfig.SEED_PEERS);
 
         this.connect();
     }
@@ -279,7 +282,7 @@ export class ElectrumClient {
         this.onConsensusChanged(ConsensusState.CONNECTING);
 
         // Connect to network
-        const peer = GenesisConfig.SEED_PEERS[Math.floor(Math.random() * GenesisConfig.SEED_PEERS.length)];
+        const peer = [...this.addressBook.values()][Math.floor(Math.random() * this.addressBook.size)];
         const agent = new Agent(peer);
 
         agent.on(AgentEvent.SYNCING, () => this.onConsensusChanged(ConsensusState.SYNCING));
@@ -298,6 +301,31 @@ export class ElectrumClient {
             console.warn(error);
             this.connect();
             return;
+        }
+
+        // Get more peers
+        this.addPeers(await agent.getPeers());
+    }
+
+    private addPeers(peers: Peer[]) {
+        // Filter out unreachable peers
+
+        peers = peers.filter(peer => {
+            // Websockify proxy does (currently) not support TOR nodes
+            if (peer.host.endsWith('.onion')) return false;
+
+            // Ignore hosts that are IP addresses
+            // if (peer.host.includes(':')) return false;
+
+            // Websockify proxy only allows standard ports
+            if (peer.ports.ssl && peer.ports.ssl !== (GenesisConfig.NETWORK_NAME === Network.MAIN ? 50002 : 60002)) return false;
+            if (peer.ports.tcp && peer.ports.tcp !== (GenesisConfig.NETWORK_NAME === Network.MAIN ? 50001 : 60001)) return false;
+
+            return true;
+        });
+
+        for (const peer of peers) {
+            this.addressBook.set(peer.host, peer);
         }
     }
 
