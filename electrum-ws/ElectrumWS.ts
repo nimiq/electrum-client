@@ -22,6 +22,8 @@ export type ElectrumWSOptions = {
 export const DEFAULT_ENDPOINT = 'wss://api.nimiqwatch.com:50002';
 export const DEFAULT_TOKEN = 'mainnet:electrum.blockstream.info';
 
+const RECONNECT_TIMEOUT = 1000;
+
 export class ElectrumWS {
     private options: ElectrumWSOptions;
     private endpoint: string;
@@ -204,7 +206,7 @@ export class ElectrumWS {
 
         if (this.options.reconnect) {
             this.setupConnectedPromise();
-            this.connect();
+            new Promise(resolve => setTimeout(resolve, RECONNECT_TIMEOUT)).then(() => this.connect());
         }
     }
 }

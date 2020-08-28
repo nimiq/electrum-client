@@ -13,6 +13,8 @@ export enum Event {
     CLOSE = 'close',
 }
 
+const HANDSHAKE_TIMEOUT = 1000;
+
 export class Agent extends Observable {
     public peer: Peer;
 
@@ -65,11 +67,13 @@ export class Agent extends Observable {
         this.fire(Event.SYNCING);
 
         await this.handshake();
-        if (!this.connection) return;
 
         const promise = new Promise<boolean>((resolve, reject) => {
-            this.once(Event.BLOCK, () => resolve(this.synced));
-            setTimeout(reject, 10 * 1000); // TODO: Extract to constant
+            this.once(Event.BLOCK, () => {
+                clearTimeout(timeout);
+                resolve(this.synced)
+            });
+            const timeout = setTimeout(() => reject(new Error('Block timeout')), HANDSHAKE_TIMEOUT);
         });
 
         this.requestHead();
@@ -128,6 +132,14 @@ export class Agent extends Observable {
         return this.connection!.getPeers();
     }
 
+    public close(reason?: string) {
+        // this.connection.close();
+        this.connection = null;
+        this.syncing = false;
+        this.synced = false;
+        this.fire(Event.CLOSE, reason);
+    }
+
     public on(event: Event, callback: Function) {
         return super.on(event, callback);
     }
@@ -149,13 +161,20 @@ export class Agent extends Observable {
             throw new Error('Agent not connected');
         }
 
-        // TODO: Add timeout
-        const features = await this.connection.getFeatures();
-        if (features.genesis_hash !== GenesisConfig.GENESIS_HASH) {
-            this.close();
-            return false;
-        }
-        return true;
+        return new Promise<boolean>((resolve, reject) => {
+            const timeout = setTimeout(() => reject(new Error('Handshake timeout')), HANDSHAKE_TIMEOUT);
+
+            this.connection!.getFeatures().then(features => {
+                clearTimeout(timeout);
+
+                if (features.genesis_hash === GenesisConfig.GENESIS_HASH) {
+                    resolve(true);
+                } else {
+                    this.close();
+                    reject(new Error('Wrong genesis hash'));
+                }
+            });
+        });
     }
 
     private requestHead() {
@@ -225,14 +244,6 @@ export class Agent extends Observable {
                 else this.fire(Event.TRANSACTION_ADDED, tx);
             }).catch(error => console.error(error));
         }
-    }
-
-    private close(reason?: string) {
-        // this.connection.close();
-        this.connection = null;
-        this.syncing = false;
-        this.synced = false;
-        this.fire(Event.CLOSE, reason);
     }
 
     private networkToTokenPrefix(name: string) {

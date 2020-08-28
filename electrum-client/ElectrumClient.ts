@@ -292,7 +292,13 @@ export class ElectrumClient {
         agent.on(AgentEvent.TRANSACTION_MINED, (tx: PlainTransaction, block: PlainBlockHeader) => this.onMinedTransaction(block, tx, block));
         agent.on(AgentEvent.CLOSE, (reason: string) => this.onConsensusFailed(agent, reason));
 
-        /* await */ agent.sync();
+        try {
+            await agent.sync();
+        } catch (error) {
+            console.warn(error);
+            this.connect();
+            return;
+        }
     }
 
     private getConfirmationHeight(blockHeight: number) {
