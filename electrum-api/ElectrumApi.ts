@@ -18,7 +18,6 @@ import {
 
 import {
     transactionToPlain,
-    setBlockOnTransaction,
     blockHeaderToPlain,
 } from './helpers';
 
@@ -62,6 +61,9 @@ export class ElectrumApi {
                     : await this.addressToScriptHash(addressOrScriptHash),
             );
 
+        // Sort by height DESC
+        receipts.sort((a, b) => (Math.max(0, b.height) || Number.MAX_SAFE_INTEGER) - (Math.max(0, a.height) || Number.MAX_SAFE_INTEGER));
+
         return receipts.map((r) => ({
             blockHeight: r.height,
             transactionHash: r.tx_hash,
@@ -69,85 +71,18 @@ export class ElectrumApi {
         }));
     }
 
-
-    // TODO: Move into future ElectrumClient to take advantage of the current chain height to calculate confirmations and tx state.
-    public async getHistory(address: string, sinceBlockHeight = 0, knownReceipts = [] as Receipt[], limit = Infinity) {
-        // Prepare map of known transactions
-        const knownTxs = new Map<string, Receipt>();
-        if (knownReceipts) {
-            for (const receipt of knownReceipts) {
-                knownTxs.set(receipt.transactionHash, receipt);
-            }
-        }
-
-        let history = await this.getReceipts(address);
-
-        // Sort by height DESC to fetch newest txs first
-        history.sort((a, b) => (b.blockHeight || Number.MAX_SAFE_INTEGER) - (a.blockHeight || Number.MAX_SAFE_INTEGER));
-
-        // Reduce history to limit
-        if (limit < Infinity) {
-            history = history.slice(0, limit);
-        }
-
-        // Remove unwanted history
-        if (sinceBlockHeight > 0) {
-            const firstUnwantedHistoryIndex = history.findIndex(receipt => receipt.blockHeight > 0 && receipt.blockHeight < sinceBlockHeight);
-            history = history.slice(0, firstUnwantedHistoryIndex);
-        }
-
-        const blockHeaders = new Map<number, PlainBlockHeader>();
-
-        // Fetch transactions
-        const txs = [];
-        for (const { transactionHash, blockHeight } of history) {
-            const knownTx = knownTxs.get(transactionHash);
-            if (knownTx && knownTx.blockHeight === Math.max(blockHeight, 0)) continue; // Ignore blockHeights of -1
-
-            try {
-                let blockHeader = blockHeaders.get(blockHeight);
-                if (!blockHeader && blockHeight > 0) {
-                    blockHeader = await this.getBlockHeader(blockHeight);
-                    blockHeaders.set(blockHeight, blockHeader);
-                }
-
-                try {
-                    // Validates merkle proof and includes block data in plain transaction
-                    const tx = await this.getTransaction(transactionHash, blockHeader);
-                    txs.push(tx);
-                } catch (error) {
-                    console.warn(error);
-                    continue;
-                }
-            } catch (error) {
-                console.warn(error);
-                return txs;
-            }
-        }
-
-        return txs;
+    public async getTransaction(hash: string, block?: PlainBlockHeader): Promise<PlainTransaction> {
+        if (block) this.proofTransaction(hash, block); // Throws on failed proof
+        const raw: string = await this.socket.request('blockchain.transaction.get', hash);
+        return transactionToPlain(raw);
     }
 
-    public async getTransaction(hash: string, heightOrBlockHeader?: number | PlainBlockHeader): Promise<PlainTransaction> {
-        let blockHeader;
-        if (typeof heightOrBlockHeader === 'object') {
-            blockHeader = heightOrBlockHeader;
-        } else if (typeof heightOrBlockHeader === 'number' && heightOrBlockHeader > 0) {
-            blockHeader = await this.getBlockHeader(heightOrBlockHeader);
+    public async proofTransaction(hash: string, block: PlainBlockHeader): Promise<boolean> {
+        const transactionMerkleRoot = await this.getTransactionMerkleRoot(hash, block.blockHeight);
+        if (transactionMerkleRoot !== block.merkleRoot) {
+            throw new Error(`Invalid transaction merkle proof for block height: ${hash}, ${block.blockHeight}`);
         }
-
-        if (blockHeader) {
-            // Proof transaction
-            const transactionMerkleRoot = await this.getTransactionMerkleRoot(hash, blockHeader.blockHeight);
-            if (transactionMerkleRoot !== blockHeader.merkleRoot) {
-                throw new Error(`Invalid transaction merkle proof for block height: ${hash}, ${blockHeader.blockHeight}`);
-            }
-        }
-
-        const raw: string = await this.socket.request('blockchain.transaction.get', hash);
-
-        const tx = transactionToPlain(raw);
-        return blockHeader ? setBlockOnTransaction(tx, blockHeader) : tx;
+        return true;
     }
 
     public async getTransactionMerkleRoot(hash: string, height: number): Promise<string> {
@@ -196,8 +131,8 @@ export class ElectrumApi {
     }
 
     public async broadcastTransaction(rawTx: string): Promise<PlainTransaction> {
-        const tx = transactionToPlain(rawTx);
         const hash = await this.socket.request('blockchain.transaction.broadcast', rawTx);
+        const tx = transactionToPlain(rawTx);
         if (hash === tx.transactionHash) return tx;
         else throw new Error(hash); // Protocol v1.0 returns errors as the result string
     }

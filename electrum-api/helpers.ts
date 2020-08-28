@@ -35,21 +35,11 @@ export function transactionToPlain(tx: string | BitcoinJS.Transaction, network?:
         isCoinbase: tx.isCoinbase(),
         weight: tx.weight(),
         locktime: tx.locktime,
-        blockHash: null,
-        blockHeight: null,
-        timestamp: null,
         // Sequence constant from https://github.com/bitcoin/bips/blob/master/bip-0125.mediawiki#summary
         replaceByFee: inputs.some(input => input.sequence < 0xfffffffe),
     };
 
     return plain;
-}
-
-export function setBlockOnTransaction(tx: PlainTransaction, block: PlainBlockHeader) {
-    tx.blockHash = block.blockHash;
-    tx.blockHeight = block.blockHeight;
-    tx.timestamp = block.timestamp;
-    return tx;
 }
 
 function inputToPlain(input: BitcoinJS.TxInput, index: number, network?: BitcoinJS.Network): PlainInput {

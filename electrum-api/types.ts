@@ -35,9 +35,6 @@ export type PlainTransaction = {
     isCoinbase: boolean,
     weight: number,
     locktime: number,
-    blockHash: string | null,
-    blockHeight: number | null,
-    timestamp: number | null,
     replaceByFee: boolean,
 }
 

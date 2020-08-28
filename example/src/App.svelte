@@ -1,6 +1,9 @@
 <main>
 	<h1>Hello ElectrumX!</h1>
 
+	<p>Consensus:</p>
+	<span>{ consensus }</span>
+
 	<p>Latest Bitcoin block:</p>
 	<code>#{head ? head.blockHeight : '...'} ({timeago} ago)</code><br>
 	<a href="{`https://blockstream.info/block/${head ? head.blockHash : ''}`}">
@@ -9,27 +12,23 @@
 </main>
 
 <script>
-	import { Agent, GenesisConfig } from '../..';
-	import { hexToBytes, bytesToHex, transactionToPlain, transactionFromPlain } from '../..';
+	import { ElectrumClient, GenesisConfig } from '../..';
+	import { hexToBytes, bytesToHex } from '../..';
 	import { BlockStore } from '../..';
 
 	window.hexToBytes = hexToBytes;
 	window.bytesToHex = bytesToHex;
-	window.transactionToPlain = transactionToPlain;
-	window.transactionFromPlain = transactionFromPlain;
 	window.BlockStore = BlockStore;
+
+	let consensus = 'connecting';
+	let head = null;
 
 	GenesisConfig.mainnet();
 
-	const peer = GenesisConfig.SEED_PEERS[Math.floor(Math.random() * GenesisConfig.SEED_PEERS.length)];
-	const agent = new Agent(peer);
-	const synced = agent.sync();
-	window.agent = agent;
-
-	let head = null;
-	agent.on('block', (header) => {
-		head = header;
-	});
+	const client = new ElectrumClient();
+	window.client = client;
+	client.addConsensusChangedListener(state => consensus = state);
+	client.addHeadChangedListener(block => head = block);
 
 	// Create self-updating timeago counter
 	let now = 0;
