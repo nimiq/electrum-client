@@ -299,7 +299,7 @@ export class ElectrumClient {
             await agent.sync();
         } catch (error) {
             console.warn(error);
-            this.connect();
+            agent.close();
             return;
         }
 

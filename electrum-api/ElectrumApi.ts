@@ -224,6 +224,10 @@ export class ElectrumApi {
         });
     }
 
+    public close() {
+        this.socket.close();
+    }
+
     private async addressToScriptHash(addr: string) {
         const outputScript = BitcoinJS.address.toOutputScript(addr, this.options.network);
 

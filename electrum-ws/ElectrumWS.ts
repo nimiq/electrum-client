@@ -23,6 +23,7 @@ export const DEFAULT_ENDPOINT = 'wss://api.nimiqwatch.com:50002';
 export const DEFAULT_TOKEN = 'mainnet:electrum.blockstream.info';
 
 const RECONNECT_TIMEOUT = 1000;
+const CLOSE_CODE = 1000; // 1000 indicates a normal closure, meaning that the purpose for which the connection was established has been fulfilled
 
 export class ElectrumWS {
     private options: ElectrumWSOptions;
@@ -98,6 +99,11 @@ export class ElectrumWS {
         this.subscriptions.delete(subscriptionKey);
 
         return this.request(`${method}.unsubscribe`, ...params);
+    }
+
+    public close() {
+        this.options.reconnect = false;
+        this.ws.close(CLOSE_CODE);
     }
 
     private setupConnectedPromise() {

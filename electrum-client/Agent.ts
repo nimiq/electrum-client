@@ -13,7 +13,7 @@ export enum Event {
     CLOSE = 'close',
 }
 
-const HANDSHAKE_TIMEOUT = 1000;
+const HANDSHAKE_TIMEOUT = 3000;
 
 export class Agent extends Observable {
     public peer: Peer;
@@ -133,7 +133,7 @@ export class Agent extends Observable {
     }
 
     public close(reason?: string) {
-        // this.connection.close();
+        if (this.connection) this.connection.close();
         this.connection = null;
         this.syncing = false;
         this.synced = false;
