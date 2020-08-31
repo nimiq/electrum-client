@@ -4,7 +4,7 @@ import { ConsensusState, TransactionState, } from './types';
 import { BlockStore, TransactionStore } from './Stores';
 import { GenesisConfig, Network } from './GenesisConfig';
 export class ElectrumClient {
-    constructor(options) {
+    constructor(options = {}) {
         this.consensusState = ConsensusState.CONNECTING;
         this.head = null;
         this.agents = new Set();
@@ -176,6 +176,17 @@ export class ElectrumClient {
             state: TransactionState.PENDING,
             confirmations: 0,
         };
+    }
+    async getMempoolFees() {
+        for (const agent of this.agents) {
+            try {
+                return await agent.getFeeHistogram();
+            }
+            catch (error) {
+                console.warn(`Client: failed to get mempool fees from ${agent.peer.host}:`, error.message);
+            }
+        }
+        throw new Error(`Failed to get mempool fees`);
     }
     addConsensusChangedListener(listener) {
         const listenerId = this.listenerId++;

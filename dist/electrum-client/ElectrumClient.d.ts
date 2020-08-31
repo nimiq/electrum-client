@@ -15,7 +15,7 @@ export declare class ElectrumClient {
     private listenerId;
     private transactionsWaitingForConfirmation;
     private options;
-    constructor(options: Partial<ElectrumClientOptions>);
+    constructor(options?: Partial<ElectrumClientOptions>);
     getHeadHash(): string | undefined;
     getHeadHeight(): number | undefined;
     getHeadBlock(): PlainBlockHeader | undefined;
@@ -25,6 +25,7 @@ export declare class ElectrumClient {
     getTransactionReceiptsByAddress(address: string): Promise<Receipt[]>;
     getTransactionsByAddress(address: string, sinceBlockHeight?: number, knownTransactions?: TransactionDetails[], limit?: number): Promise<TransactionDetails[]>;
     sendTransaction(serializedTx: string): Promise<TransactionDetails>;
+    getMempoolFees(): Promise<[number, number][]>;
     addConsensusChangedListener(listener: ConsensusChangedListener): Handle;
     addHeadChangedListener(listener: HeadChangedListener): Handle;
     addTransactionListener(listener: TransactionListener, addresses: string[]): Handle;
