@@ -37,7 +37,7 @@ export class ElectrumClient {
 
     private options: ElectrumClientOptions;
 
-    constructor(options: Partial<ElectrumClientOptions>) {
+    constructor(options: Partial<ElectrumClientOptions> = {}) {
         this.options = {
             requiredBlockConfirmations: 6,
             ...options,
@@ -224,6 +224,17 @@ export class ElectrumClient {
             state: TransactionState.PENDING,
             confirmations: 0,
         };
+    }
+
+    public async getMempoolFees() {
+        for (const agent of this.agents) {
+            try {
+                return await agent.getFeeHistogram();
+            } catch (error) {
+                console.warn(`Client: failed to get mempool fees from ${agent.peer.host}:`, error.message);
+            }
+        }
+        throw new Error(`Failed to get mempool fees`);
     }
 
     public addConsensusChangedListener(listener: ConsensusChangedListener): Handle {
