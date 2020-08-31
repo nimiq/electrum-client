@@ -15,16 +15,19 @@ export declare class ElectrumWS {
     private connectedResolver;
     private connectedRejector;
     private pingInterval;
+    private incompleteMessage;
     ws: WebSocket;
     constructor(endpoint?: string, options?: Partial<ElectrumWSOptions>);
     request(method: string, ...params: (string | number)[]): Promise<any>;
     subscribe(method: string, callback: (...payload: any[]) => any, ...params: (string | number)[]): Promise<void>;
     unsubscribe(method: string, ...params: (string | number)[]): Promise<any>;
+    close(): void;
     private setupConnectedPromise;
     private connect;
     private ping;
     private onOpen;
     private onMessage;
+    private parseLine;
     private onError;
     private onClose;
 }

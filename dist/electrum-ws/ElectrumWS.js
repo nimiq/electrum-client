@@ -1,12 +1,15 @@
 import { stringToBytes, bytesToString } from "./helpers";
 export const DEFAULT_ENDPOINT = 'wss://api.nimiqwatch.com:50002';
 export const DEFAULT_TOKEN = 'mainnet:electrum.blockstream.info';
+const RECONNECT_TIMEOUT = 1000;
+const CLOSE_CODE = 1000;
 export class ElectrumWS {
     constructor(endpoint = DEFAULT_ENDPOINT, options = {}) {
         this.requests = new Map();
         this.subscriptions = new Map();
         this.connected = false;
         this.pingInterval = -1;
+        this.incompleteMessage = '';
         this.endpoint = endpoint;
         this.options = Object.assign({
             proxy: true,
@@ -50,6 +53,10 @@ export class ElectrumWS {
         this.subscriptions.delete(subscriptionKey);
         return this.request(`${method}.unsubscribe`, ...params);
     }
+    close() {
+        this.options.reconnect = false;
+        this.ws.close(CLOSE_CODE);
+    }
     setupConnectedPromise() {
         this.connectedPromise = new Promise((resolve, reject) => {
             this.connectedResolver = resolve;
@@ -90,7 +97,9 @@ export class ElectrumWS {
         const raw = bytesToString(msg.data);
         const lines = raw.split('\n').filter(line => line.length > 0);
         for (const line of lines) {
-            const response = JSON.parse(line);
+            const response = this.parseLine(line);
+            if (!response)
+                continue;
             console.debug('ElectrumWS MSG:', response);
             if ('id' in response && this.requests.has(response.id)) {
                 const callbacks = this.requests.get(response.id);
@@ -102,7 +111,7 @@ export class ElectrumWS {
             }
             if ('method' in response && (response.method).endsWith('subscribe')) {
                 const method = response.method.replace('.subscribe', '');
-                const params = response.params;
+                const params = response.params || [];
                 const subscriptionKey = `${method}${typeof params[0] === 'string' ? `-${params[0]}` : ''}`;
                 if (this.subscriptions.has(subscriptionKey)) {
                     const callback = this.subscriptions.get(subscriptionKey);
@@ -110,6 +119,20 @@ export class ElectrumWS {
                 }
             }
         }
+    }
+    parseLine(line) {
+        try {
+            const parsed = JSON.parse(line);
+            this.incompleteMessage = '';
+            return parsed;
+        }
+        catch (error) {
+        }
+        if (this.incompleteMessage && !line.includes(this.incompleteMessage)) {
+            return this.parseLine(`${this.incompleteMessage}${line}`);
+        }
+        this.incompleteMessage = line;
+        return false;
     }
     onError(event) {
         console.error('ElectrumWS ERROR:', event);
@@ -121,7 +144,7 @@ export class ElectrumWS {
         this.connectedRejector();
         if (this.options.reconnect) {
             this.setupConnectedPromise();
-            this.connect();
+            new Promise(resolve => setTimeout(resolve, RECONNECT_TIMEOUT)).then(() => this.connect());
         }
     }
 }
