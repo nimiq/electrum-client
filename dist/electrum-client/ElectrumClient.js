@@ -23,10 +23,12 @@ export class ElectrumClient {
         this.connect();
     }
     getHeadHash() {
-        return this.head?.blockHash;
+        var _a;
+        return (_a = this.head) === null || _a === void 0 ? void 0 : _a.blockHash;
     }
     getHeadHeight() {
-        return this.head?.blockHeight;
+        var _a;
+        return (_a = this.head) === null || _a === void 0 ? void 0 : _a.blockHeight;
     }
     getHeadBlock() {
         return this.head || undefined;
