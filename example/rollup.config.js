@@ -36,10 +36,12 @@ export default {
 		file: 'public/build/bundle.js',
 		globals: {
 			'bitcoinjs-lib': 'BitcoinJS',
+			'buffer': 'BitcoinJS',
 		},
 	},
 	external: [
 		'bitcoinjs-lib',
+		'buffer',
 	],
 	plugins: [
 		svelte({
