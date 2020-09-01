@@ -42,7 +42,7 @@ export function transactionToPlain(tx: string | BitcoinJS.Transaction, network?:
     return plain;
 }
 
-function inputToPlain(input: BitcoinJS.TxInput, index: number, network?: BitcoinJS.Network): PlainInput {
+export function inputToPlain(input: BitcoinJS.TxInput, index: number, network?: BitcoinJS.Network): PlainInput {
     return {
         script: bytesToHex(input.script),
         transactionHash: bytesToHex(new Uint8Array(input.hash).reverse()),
@@ -57,7 +57,7 @@ function inputToPlain(input: BitcoinJS.TxInput, index: number, network?: Bitcoin
     };
 }
 
-function outputToPlain(output: BitcoinJS.TxOutput, index: number, network?: BitcoinJS.Network): PlainOutput {
+export function outputToPlain(output: BitcoinJS.TxOutput, index: number, network?: BitcoinJS.Network): PlainOutput {
     let address: string | null = null;
     try {
         // Outputs can be OP_RETURN, which does not translate to an address
@@ -74,7 +74,7 @@ function outputToPlain(output: BitcoinJS.TxOutput, index: number, network?: Bitc
     };
 }
 
-function deriveAddressFromInput(input: BitcoinJS.TxInput, network?: BitcoinJS.Network): string | undefined {
+export function deriveAddressFromInput(input: BitcoinJS.TxInput, network?: BitcoinJS.Network): string | undefined {
     if (BitcoinJS.Transaction.isCoinbaseHash(input.hash)) return undefined;
 
     const chunks = (BitcoinJS.script.decompile(input.script) || []) as Buffer[];
@@ -109,20 +109,38 @@ function deriveAddressFromInput(input: BitcoinJS.TxInput, network?: BitcoinJS.Ne
         }).address;
     }
 
-    // Legacy MultiSig P2SH(P2MS) (3...)
-    // 80975cddebaa93aa21a6477c0d050685d6820fa1068a2731db0f39b535cbd369 0,1,2
+    // Legacy Scripts (3...)
     if (chunks.length > 2 && witness.length === 0) {
-        const m = chunks.length - 2; // Number of signatures
-        const pubkeys = BitcoinJS.script.decompile(chunks[chunks.length - 1])!
-            .filter((n: number | Buffer) => typeof n !== 'number') as Buffer[];
+        const redeemScript = BitcoinJS.script.decompile(chunks[chunks.length - 1]);
+        if (!redeemScript) {
+            console.error(new Error('Cannot decode address from input'));
+            return undefined;
+        }
 
-        return BitcoinJS.payments.p2sh({
-            redeem: BitcoinJS.payments.p2ms({
-                m,
-                pubkeys,
+        // MultiSig P2SH(P2MS)
+        // 80975cddebaa93aa21a6477c0d050685d6820fa1068a2731db0f39b535cbd369 0,1,2
+        if (redeemScript[redeemScript.length - 1] === BitcoinJS.script.OPS.OP_CHECKMULTISIG) {
+            const m = chunks.length - 2; // Number of signatures
+            const pubkeys = redeemScript.filter((n: number | Buffer) => typeof n !== 'number') as Buffer[];
+
+            return BitcoinJS.payments.p2sh({
+                redeem: BitcoinJS.payments.p2ms({
+                    m,
+                    pubkeys,
+                    network,
+                }),
+            }).address;
+        }
+
+        // HTLC Redeem P2SH
+        if (redeemScript[0] === BitcoinJS.script.OPS.OP_IF) {
+            return BitcoinJS.payments.p2sh({
+                redeem: {
+                    output: chunks[chunks.length - 1],
+                },
                 network,
-            }),
-        }).address;
+            }).address;
+        }
     }
 
     // Nested SegWit MultiSig P2SH(P2WSH(P2MS)) (3...)
@@ -143,20 +161,37 @@ function deriveAddressFromInput(input: BitcoinJS.TxInput, network?: BitcoinJS.Ne
         }).address;
     }
 
-    // Native SegWit MultiSig P2WSH(P2MS) (bc1...)
-    // 54a3e33efff4c508fa5c8ce7ccf4b08538a8fd2bf808b97ae51c21cf83df2dd1 0
+    // Native SegWit Scripts (bc1...)
     if (chunks.length === 0 && witness.length > 2) {
-        const m = witness.length - 2; // Number of signatures
-        const pubkeys = BitcoinJS.script.decompile(witness[witness.length - 1])!
-            .filter((n: number | Uint8Array) => typeof n !== 'number') as Buffer[];
+        const redeemScript = BitcoinJS.script.decompile(witness[witness.length - 1]);
+        if (!redeemScript) {
+            console.error(new Error('Cannot decode address from input'));
+            return undefined;
+        }
 
-        return BitcoinJS.payments.p2wsh({
-            redeem: BitcoinJS.payments.p2ms({
-                m,
-                pubkeys,
+        // MultiSig P2WSH(P2MS)
+        // 54a3e33efff4c508fa5c8ce7ccf4b08538a8fd2bf808b97ae51c21cf83df2dd1 0
+        if (redeemScript[redeemScript.length - 1] === BitcoinJS.script.OPS.OP_CHECKMULTISIG) {
+            const m = witness.length - 2; // Number of signatures
+            const pubkeys = redeemScript.filter((n: number | Uint8Array) => typeof n !== 'number') as Buffer[];
+
+            return BitcoinJS.payments.p2wsh({
+                redeem: BitcoinJS.payments.p2ms({
+                    m,
+                    pubkeys,
+                    network,
+                }),
+            }).address;
+        }
+
+        // HTLC Redeem P2WSH
+        // 5800c704f139e388d4146be7110294470c8c17b34488544863a535d2346a4637 0
+        if (redeemScript[0] === BitcoinJS.script.OPS.OP_IF) {
+            return BitcoinJS.payments.p2wsh({
+                witness,
                 network,
-            }),
-        }).address;
+            }).address
+        }
     }
 
     console.error(new Error('Cannot decode address from input'));
@@ -172,7 +207,7 @@ export function transactionFromPlain(plain: PlainTransaction): BitcoinJS.Transac
     return tx;
 }
 
-function inputFromPlain(plain: PlainInput): BitcoinJS.TxInput {
+export function inputFromPlain(plain: PlainInput): BitcoinJS.TxInput {
     return {
         hash: Buffer.from(hexToBytes(plain.transactionHash).reverse()),
         index: plain.outputIndex,
@@ -182,7 +217,7 @@ function inputFromPlain(plain: PlainInput): BitcoinJS.TxInput {
     };
 }
 
-function outputFromPlain(plain: PlainOutput): BitcoinJS.TxOutput {
+export function outputFromPlain(plain: PlainOutput): BitcoinJS.TxOutput {
     return {
         script: Buffer.from(hexToBytes(plain.script)),
         value: plain.value,
