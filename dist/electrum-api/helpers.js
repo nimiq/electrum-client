@@ -34,7 +34,7 @@ export function transactionToPlain(tx, network) {
     };
     return plain;
 }
-function inputToPlain(input, index, network) {
+export function inputToPlain(input, index, network) {
     return {
         script: bytesToHex(input.script),
         transactionHash: bytesToHex(new Uint8Array(input.hash).reverse()),
@@ -49,7 +49,7 @@ function inputToPlain(input, index, network) {
         sequence: input.sequence,
     };
 }
-function outputToPlain(output, index, network) {
+export function outputToPlain(output, index, network) {
     let address = null;
     try {
         address = BitcoinJS.address.fromOutputScript(output.script, network);
@@ -63,7 +63,7 @@ function outputToPlain(output, index, network) {
         index,
     };
 }
-function deriveAddressFromInput(input, network) {
+export function deriveAddressFromInput(input, network) {
     if (BitcoinJS.Transaction.isCoinbaseHash(input.hash))
         return undefined;
     const chunks = (BitcoinJS.script.decompile(input.script) || []);
@@ -89,16 +89,30 @@ function deriveAddressFromInput(input, network) {
         }).address;
     }
     if (chunks.length > 2 && witness.length === 0) {
-        const m = chunks.length - 2;
-        const pubkeys = BitcoinJS.script.decompile(chunks[chunks.length - 1])
-            .filter((n) => typeof n !== 'number');
-        return BitcoinJS.payments.p2sh({
-            redeem: BitcoinJS.payments.p2ms({
-                m,
-                pubkeys,
+        const redeemScript = BitcoinJS.script.decompile(chunks[chunks.length - 1]);
+        if (!redeemScript) {
+            console.error(new Error('Cannot decode address from input'));
+            return undefined;
+        }
+        if (redeemScript[redeemScript.length - 1] === BitcoinJS.script.OPS.OP_CHECKMULTISIG) {
+            const m = chunks.length - 2;
+            const pubkeys = redeemScript.filter((n) => typeof n !== 'number');
+            return BitcoinJS.payments.p2sh({
+                redeem: BitcoinJS.payments.p2ms({
+                    m,
+                    pubkeys,
+                    network,
+                }),
+            }).address;
+        }
+        if (redeemScript[0] === BitcoinJS.script.OPS.OP_IF) {
+            return BitcoinJS.payments.p2sh({
+                redeem: {
+                    output: chunks[chunks.length - 1],
+                },
                 network,
-            }),
-        }).address;
+            }).address;
+        }
     }
     if (chunks.length === 1 && witness.length > 2) {
         const m = witness.length - 2;
@@ -115,16 +129,28 @@ function deriveAddressFromInput(input, network) {
         }).address;
     }
     if (chunks.length === 0 && witness.length > 2) {
-        const m = witness.length - 2;
-        const pubkeys = BitcoinJS.script.decompile(witness[witness.length - 1])
-            .filter((n) => typeof n !== 'number');
-        return BitcoinJS.payments.p2wsh({
-            redeem: BitcoinJS.payments.p2ms({
-                m,
-                pubkeys,
+        const redeemScript = BitcoinJS.script.decompile(witness[witness.length - 1]);
+        if (!redeemScript) {
+            console.error(new Error('Cannot decode address from input'));
+            return undefined;
+        }
+        if (redeemScript[redeemScript.length - 1] === BitcoinJS.script.OPS.OP_CHECKMULTISIG) {
+            const m = witness.length - 2;
+            const pubkeys = redeemScript.filter((n) => typeof n !== 'number');
+            return BitcoinJS.payments.p2wsh({
+                redeem: BitcoinJS.payments.p2ms({
+                    m,
+                    pubkeys,
+                    network,
+                }),
+            }).address;
+        }
+        if (redeemScript[0] === BitcoinJS.script.OPS.OP_IF) {
+            return BitcoinJS.payments.p2wsh({
+                witness,
                 network,
-            }),
-        }).address;
+            }).address;
+        }
     }
     console.error(new Error('Cannot decode address from input'));
     return undefined;
@@ -137,7 +163,7 @@ export function transactionFromPlain(plain) {
     tx.outs = plain.outputs.sort((a, b) => a.index - b.index).map(output => outputFromPlain(output));
     return tx;
 }
-function inputFromPlain(plain) {
+export function inputFromPlain(plain) {
     return {
         hash: Buffer.from(hexToBytes(plain.transactionHash).reverse()),
         index: plain.outputIndex,
@@ -146,7 +172,7 @@ function inputFromPlain(plain) {
         witness: plain.witness.map(scriptOrNumber => typeof scriptOrNumber === 'string' ? Buffer.from(hexToBytes(scriptOrNumber)) : scriptOrNumber),
     };
 }
-function outputFromPlain(plain) {
+export function outputFromPlain(plain) {
     return {
         script: Buffer.from(hexToBytes(plain.script)),
         value: plain.value,

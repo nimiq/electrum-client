@@ -43,6 +43,7 @@ export class ElectrumClient {
             }
             catch (error) {
                 console.warn(`Client: failed to get block header at ${height} from ${agent.peer.host}:`, error.message);
+                console.debug(error);
             }
         }
         throw new Error(`Failed to get block header at ${height}`);
@@ -54,6 +55,7 @@ export class ElectrumClient {
             }
             catch (error) {
                 console.warn(`Client: failed to get balance for ${address} from ${agent.peer.host}:`, error.message);
+                console.debug(error);
             }
         }
         throw new Error(`Failed to get balance for ${address}`);
@@ -70,6 +72,7 @@ export class ElectrumClient {
             }
             catch (error) {
                 console.warn(`Client: failed to get transaction ${hash} from ${agent.peer.host}:`, error.message);
+                console.debug(error);
             }
         }
         throw new Error(`Failed to get transaction ${hash}`);
@@ -81,6 +84,7 @@ export class ElectrumClient {
             }
             catch (error) {
                 console.warn(`Client: failed to get transaction receipts for ${address} from ${agent.peer.host}:`, error.message);
+                console.debug(error);
             }
         }
         throw new Error(`Failed to get transaction receipts for ${address}`);
@@ -162,6 +166,7 @@ export class ElectrumClient {
             }
             catch (error) {
                 console.warn(`Client: failed to broadcast transaction to ${agent.peer.host}:`, error.message);
+                console.debug(error);
             }
         }
         if (!tx) {
@@ -184,6 +189,7 @@ export class ElectrumClient {
             }
             catch (error) {
                 console.warn(`Client: failed to get mempool fees from ${agent.peer.host}:`, error.message);
+                console.debug(error);
             }
         }
         throw new Error(`Failed to get mempool fees`);

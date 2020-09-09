@@ -34,7 +34,7 @@ export class ElectrumApi {
         if (block)
             this.proofTransaction(hash, block);
         const raw = await this.socket.request('blockchain.transaction.get', hash);
-        return transactionToPlain(raw);
+        return transactionToPlain(raw, this.options.network);
     }
     async proofTransaction(hash, block) {
         const transactionMerkleRoot = await this.getTransactionMerkleRoot(hash, block.blockHeight);
