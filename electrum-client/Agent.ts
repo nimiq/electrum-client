@@ -121,8 +121,8 @@ export class Agent extends Observable {
         if (!this.synced) throw new Error('Agent not synced');
         if (typeof addresses === 'string') addresses = [addresses];
         for (const address of addresses) {
-            // TODO: Apply timeout
-            return this.connection!.subscribeReceipts(address, (receipts: Receipt[]) => this.onReceipts(address, receipts));
+            // TODO: Apply timeout?
+            await this.connection!.subscribeReceipts(address, (receipts: Receipt[]) => this.onReceipts(address, receipts));
         }
     }
 

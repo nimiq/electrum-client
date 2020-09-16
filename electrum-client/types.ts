@@ -25,4 +25,4 @@ export type TransactionDetails = PlainTransaction & {
 export type Handle = number;
 export type ConsensusChangedListener = (consensusState: ConsensusState) => any;
 export type HeadChangedListener = (block: PlainBlockHeader, reason: string, revertedBlocks: string[], adoptedBlocks: string[]) => any;
-export type TransactionListener = (transaction: TransactionDetails & { state: TransactionState, confirmations?: number }) => any;
+export type TransactionListener = (transaction: TransactionDetails) => any;
