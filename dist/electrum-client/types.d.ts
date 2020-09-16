@@ -21,7 +21,4 @@ export declare type TransactionDetails = PlainTransaction & {
 export declare type Handle = number;
 export declare type ConsensusChangedListener = (consensusState: ConsensusState) => any;
 export declare type HeadChangedListener = (block: PlainBlockHeader, reason: string, revertedBlocks: string[], adoptedBlocks: string[]) => any;
-export declare type TransactionListener = (transaction: TransactionDetails & {
-    state: TransactionState;
-    confirmations?: number;
-}) => any;
+export declare type TransactionListener = (transaction: TransactionDetails) => any;

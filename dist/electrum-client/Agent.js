@@ -103,7 +103,7 @@ export class Agent extends Observable {
         if (typeof addresses === 'string')
             addresses = [addresses];
         for (const address of addresses) {
-            return this.connection.subscribeReceipts(address, (receipts) => this.onReceipts(address, receipts));
+            await this.connection.subscribeReceipts(address, (receipts) => this.onReceipts(address, receipts));
         }
     }
     async getPeers() {
