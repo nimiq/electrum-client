@@ -2,7 +2,7 @@ import * as BitcoinJS from 'bitcoinjs-lib';
 import { Balance, PlainBlockHeader, PlainTransaction, Receipt, PeerFeatures, Peer } from './types';
 export declare type ElectrumApiOptions = {
     endpoint?: string;
-    network?: BitcoinJS.Network;
+    network: BitcoinJS.Network;
     proxy?: boolean;
     token?: string;
     reconnect?: boolean;

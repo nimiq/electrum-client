@@ -4,9 +4,15 @@ import { transactionToPlain, blockHeaderToPlain, } from './helpers';
 export class ElectrumApi {
     constructor(options = {}) {
         if (typeof options.network === 'string') {
+            if (!(options.network in BitcoinJS.networks)) {
+                throw new Error('Invalid network name');
+            }
             options.network = BitcoinJS.networks[options.network];
         }
-        this.options = options;
+        this.options = {
+            ...options,
+            network: options.network || BitcoinJS.networks.bitcoin,
+        };
         const wsOptions = {};
         if ('proxy' in this.options)
             wsOptions.proxy = this.options.proxy;
@@ -69,7 +75,7 @@ export class ElectrumApi {
     }
     async broadcastTransaction(rawTx) {
         const hash = await this.socket.request('blockchain.transaction.broadcast', rawTx);
-        const tx = transactionToPlain(rawTx);
+        const tx = transactionToPlain(rawTx, this.options.network);
         if (hash === tx.transactionHash)
             return tx;
         else

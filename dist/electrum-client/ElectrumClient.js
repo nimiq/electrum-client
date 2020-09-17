@@ -1,3 +1,4 @@
+import * as BitcoinJS from 'bitcoinjs-lib';
 import { transactionFromPlain, transactionToPlain } from '../electrum-api';
 import { Agent, Event as AgentEvent } from './Agent';
 import { ConsensusState, TransactionState, } from './types';
@@ -171,7 +172,7 @@ export class ElectrumClient {
         }
         if (!tx) {
             return {
-                ...transactionToPlain(serializedTx),
+                ...transactionToPlain(serializedTx, BitcoinJS.networks[GenesisConfig.NETWORK_NAME]),
                 state: TransactionState.NEW,
                 confirmations: 0,
             };
