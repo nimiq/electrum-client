@@ -23,7 +23,7 @@ import {
 
 export type ElectrumApiOptions = {
     endpoint?: string,
-    network?: BitcoinJS.Network,
+    network: BitcoinJS.Network,
     proxy?: boolean,
     token?: string,
     reconnect?: boolean;
@@ -35,10 +35,16 @@ export class ElectrumApi {
 
     constructor(options: Omit<ElectrumApiOptions, 'network'> & { network?: 'bitcoin' | 'testnet' | BitcoinJS.Network } = {}) {
         if (typeof options.network === 'string') {
+            if (!(options.network in BitcoinJS.networks)) {
+                throw new Error('Invalid network name');
+            }
             options.network = BitcoinJS.networks[options.network];
         }
 
-        this.options = options as ElectrumApiOptions;
+        this.options = {
+            ...options,
+            network: options.network || BitcoinJS.networks.bitcoin,
+        };
 
         const wsOptions: Partial<ElectrumWSOptions> = {};
         if ('proxy' in this.options) wsOptions.proxy = this.options.proxy;
@@ -132,7 +138,7 @@ export class ElectrumApi {
 
     public async broadcastTransaction(rawTx: string): Promise<PlainTransaction> {
         const hash = await this.socket.request('blockchain.transaction.broadcast', rawTx);
-        const tx = transactionToPlain(rawTx);
+        const tx = transactionToPlain(rawTx, this.options.network);
         if (hash === tx.transactionHash) return tx;
         else throw new Error(hash); // Protocol v1.0 returns errors as the result string
     }

@@ -20,7 +20,7 @@ export function blockHeaderToPlain(header: string | BitcoinJS.Block, height: num
     };
 }
 
-export function transactionToPlain(tx: string | BitcoinJS.Transaction, network?: BitcoinJS.Network): PlainTransaction {
+export function transactionToPlain(tx: string | BitcoinJS.Transaction, network: BitcoinJS.Network): PlainTransaction {
     if (typeof tx === 'string') tx = BitcoinJS.Transaction.fromHex(tx);
 
     const inputs = tx.ins.map((input: BitcoinJS.TxInput, index: number) => inputToPlain(input, index, network));
@@ -42,7 +42,7 @@ export function transactionToPlain(tx: string | BitcoinJS.Transaction, network?:
     return plain;
 }
 
-export function inputToPlain(input: BitcoinJS.TxInput, index: number, network?: BitcoinJS.Network): PlainInput {
+export function inputToPlain(input: BitcoinJS.TxInput, index: number, network: BitcoinJS.Network): PlainInput {
     return {
         script: bytesToHex(input.script),
         transactionHash: bytesToHex(new Uint8Array(input.hash).reverse()),
@@ -57,7 +57,7 @@ export function inputToPlain(input: BitcoinJS.TxInput, index: number, network?: 
     };
 }
 
-export function outputToPlain(output: BitcoinJS.TxOutput, index: number, network?: BitcoinJS.Network): PlainOutput {
+export function outputToPlain(output: BitcoinJS.TxOutput, index: number, network: BitcoinJS.Network): PlainOutput {
     let address: string | null = null;
     try {
         // Outputs can be OP_RETURN, which does not translate to an address
@@ -74,7 +74,7 @@ export function outputToPlain(output: BitcoinJS.TxOutput, index: number, network
     };
 }
 
-export function deriveAddressFromInput(input: BitcoinJS.TxInput, network?: BitcoinJS.Network): string | undefined {
+export function deriveAddressFromInput(input: BitcoinJS.TxInput, network: BitcoinJS.Network): string | undefined {
     if (BitcoinJS.Transaction.isCoinbaseHash(input.hash)) return undefined;
 
     const chunks = (BitcoinJS.script.decompile(input.script) || []) as Buffer[];
