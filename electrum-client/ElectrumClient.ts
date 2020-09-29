@@ -244,6 +244,18 @@ export class ElectrumClient {
         throw new Error(`Failed to get mempool fees`);
     }
 
+    public async getMinimumRelayFee() {
+        for (const agent of this.agents) {
+            try {
+                return await agent.getMinimumRelayFee();
+            } catch (error) {
+                console.warn(`Client: failed to get relay fee from ${agent.peer.host}:`, error.message);
+                console.debug(error);
+            }
+        }
+        throw new Error(`Failed to get relay fee`);
+    }
+
     public addConsensusChangedListener(listener: ConsensusChangedListener): Handle {
         const listenerId = this.listenerId++;
         this.consensusChangedListeners.set(listenerId, listener);
