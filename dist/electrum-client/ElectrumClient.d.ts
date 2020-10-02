@@ -26,6 +26,7 @@ export declare class ElectrumClient {
     getTransactionsByAddress(address: string, sinceBlockHeight?: number, knownTransactions?: TransactionDetails[], limit?: number): Promise<TransactionDetails[]>;
     sendTransaction(serializedTx: string): Promise<TransactionDetails>;
     getMempoolFees(): Promise<[number, number][]>;
+    getMinimumRelayFee(): Promise<number>;
     addConsensusChangedListener(listener: ConsensusChangedListener): Handle;
     addHeadChangedListener(listener: HeadChangedListener): Handle;
     addTransactionListener(listener: TransactionListener, addresses: string[]): Handle;

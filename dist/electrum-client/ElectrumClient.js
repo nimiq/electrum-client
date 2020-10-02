@@ -1,5 +1,4 @@
-import * as BitcoinJS from 'bitcoinjs-lib';
-import { transactionFromPlain, transactionToPlain } from '../electrum-api';
+import { transactionFromPlain } from '../electrum-api';
 import { Agent, Event as AgentEvent } from './Agent';
 import { ConsensusState, TransactionState, } from './types';
 import { BlockStore, TransactionStore } from './Stores';
@@ -44,7 +43,6 @@ export class ElectrumClient {
             }
             catch (error) {
                 console.warn(`Client: failed to get block header at ${height} from ${agent.peer.host}:`, error.message);
-                console.debug(error);
             }
         }
         throw new Error(`Failed to get block header at ${height}`);
@@ -56,7 +54,6 @@ export class ElectrumClient {
             }
             catch (error) {
                 console.warn(`Client: failed to get balance for ${address} from ${agent.peer.host}:`, error.message);
-                console.debug(error);
             }
         }
         throw new Error(`Failed to get balance for ${address}`);
@@ -73,7 +70,6 @@ export class ElectrumClient {
             }
             catch (error) {
                 console.warn(`Client: failed to get transaction ${hash} from ${agent.peer.host}:`, error.message);
-                console.debug(error);
             }
         }
         throw new Error(`Failed to get transaction ${hash}`);
@@ -85,7 +81,6 @@ export class ElectrumClient {
             }
             catch (error) {
                 console.warn(`Client: failed to get transaction receipts for ${address} from ${agent.peer.host}:`, error.message);
-                console.debug(error);
             }
         }
         throw new Error(`Failed to get transaction receipts for ${address}`);
@@ -161,21 +156,18 @@ export class ElectrumClient {
     }
     async sendTransaction(serializedTx) {
         let tx;
+        let sendError;
         for (const agent of this.agents) {
             try {
                 tx = await agent.broadcastTransaction(serializedTx);
             }
             catch (error) {
+                sendError = error;
                 console.warn(`Client: failed to broadcast transaction to ${agent.peer.host}:`, error.message);
-                console.debug(error);
             }
         }
         if (!tx) {
-            return {
-                ...transactionToPlain(serializedTx, BitcoinJS.networks[GenesisConfig.NETWORK_NAME]),
-                state: TransactionState.NEW,
-                confirmations: 0,
-            };
+            throw (sendError || new Error('Could not send transaction'));
         }
         return {
             ...tx,
@@ -190,10 +182,20 @@ export class ElectrumClient {
             }
             catch (error) {
                 console.warn(`Client: failed to get mempool fees from ${agent.peer.host}:`, error.message);
-                console.debug(error);
             }
         }
         throw new Error(`Failed to get mempool fees`);
+    }
+    async getMinimumRelayFee() {
+        for (const agent of this.agents) {
+            try {
+                return await agent.getMinimumRelayFee();
+            }
+            catch (error) {
+                console.warn(`Client: failed to get relay fee from ${agent.peer.host}:`, error.message);
+            }
+        }
+        throw new Error(`Failed to get relay fee`);
     }
     addConsensusChangedListener(listener) {
         const listenerId = this.listenerId++;

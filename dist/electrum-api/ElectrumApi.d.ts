@@ -20,6 +20,7 @@ export declare class ElectrumApi {
     getTransactionMerkleRoot(hash: string, height: number): Promise<string>;
     getBlockHeader(height: number): Promise<PlainBlockHeader>;
     getFeeHistogram(): Promise<Array<[number, number]>>;
+    getRelayFee(): Promise<number>;
     broadcastTransaction(rawTx: string): Promise<PlainTransaction>;
     subscribeReceipts(address: string, callback: (receipts: Receipt[]) => any): Promise<void>;
     subscribeHeaders(callback: (header: PlainBlockHeader) => any): Promise<void>;

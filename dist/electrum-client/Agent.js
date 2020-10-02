@@ -92,6 +92,11 @@ export class Agent extends Observable {
             throw new Error('Agent not synced');
         return this.connection.getFeeHistogram();
     }
+    async getMinimumRelayFee() {
+        if (!this.synced)
+            throw new Error('Agent not synced');
+        return this.connection.getRelayFee();
+    }
     async broadcastTransaction(rawTx) {
         if (!this.synced)
             throw new Error('Agent not synced');
