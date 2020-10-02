@@ -136,6 +136,11 @@ export class ElectrumApi {
         return this.socket.request('mempool.get_fee_histogram');
     }
 
+    public async getRelayFee(): Promise<number> {
+        const coins: number = await this.socket.request('blockchain.relayfee');
+        return Math.round(coins * 1e8);
+    }
+
     public async broadcastTransaction(rawTx: string): Promise<PlainTransaction> {
         const hash = await this.socket.request('blockchain.transaction.broadcast', rawTx);
         const tx = transactionToPlain(rawTx, this.options.network);

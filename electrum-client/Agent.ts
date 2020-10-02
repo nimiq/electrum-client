@@ -111,6 +111,12 @@ export class Agent extends Observable {
         return this.connection!.getFeeHistogram();
     }
 
+    public async getMinimumRelayFee() {
+        if (!this.synced) throw new Error('Agent not synced');
+        // TODO: Apply timeout
+        return this.connection!.getRelayFee();
+    }
+
     public async broadcastTransaction(rawTx: string) {
         if (!this.synced) throw new Error('Agent not synced');
         // TODO: Apply timeout
