@@ -208,21 +208,19 @@ export class ElectrumClient {
     public async sendTransaction(serializedTx: string): Promise<TransactionDetails> {
         // Relay transaction to all connected peers.
         let tx: PlainTransaction | undefined;
+        let sendError: Error | undefined;
         for (const agent of this.agents) {
             try {
                 tx = await agent.broadcastTransaction(serializedTx);
             } catch (error) {
+                sendError = error;
                 console.warn(`Client: failed to broadcast transaction to ${agent.peer.host}:`, error.message);
                 console.debug(error);
             }
         }
 
         if (!tx) {
-            return {
-                ...transactionToPlain(serializedTx, BitcoinJS.networks[GenesisConfig.NETWORK_NAME]),
-                state: TransactionState.NEW,
-                confirmations: 0,
-            };
+            throw (sendError || new Error('Could not send transaction'));
         }
 
         return {
