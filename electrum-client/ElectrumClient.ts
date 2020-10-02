@@ -71,7 +71,6 @@ export class ElectrumClient {
                 return await agent.getBlockHeader(height);
             } catch (error) {
                 console.warn(`Client: failed to get block header at ${height} from ${agent.peer.host}:`, error.message);
-                console.debug(error);
             }
         }
         throw new Error(`Failed to get block header at ${height}`);
@@ -83,7 +82,6 @@ export class ElectrumClient {
                 return await agent.getBalance(address);
             } catch (error) {
                 console.warn(`Client: failed to get balance for ${address} from ${agent.peer.host}:`, error.message);
-                console.debug(error);
             }
         }
         throw new Error(`Failed to get balance for ${address}`);
@@ -100,7 +98,6 @@ export class ElectrumClient {
                 return await agent.getTransaction(hash, block);
             } catch (error) {
                 console.warn(`Client: failed to get transaction ${hash} from ${agent.peer.host}:`, error.message);
-                console.debug(error);
             }
         }
         throw new Error(`Failed to get transaction ${hash}`);
@@ -112,7 +109,6 @@ export class ElectrumClient {
                 return await agent.getTransactionReceipts(address);
             } catch (error) {
                 console.warn(`Client: failed to get transaction receipts for ${address} from ${agent.peer.host}:`, error.message);
-                console.debug(error);
             }
         }
         throw new Error(`Failed to get transaction receipts for ${address}`);
@@ -215,7 +211,6 @@ export class ElectrumClient {
             } catch (error) {
                 sendError = error;
                 console.warn(`Client: failed to broadcast transaction to ${agent.peer.host}:`, error.message);
-                console.debug(error);
             }
         }
 
@@ -236,7 +231,6 @@ export class ElectrumClient {
                 return await agent.getFeeHistogram();
             } catch (error) {
                 console.warn(`Client: failed to get mempool fees from ${agent.peer.host}:`, error.message);
-                console.debug(error);
             }
         }
         throw new Error(`Failed to get mempool fees`);
@@ -248,7 +242,6 @@ export class ElectrumClient {
                 return await agent.getMinimumRelayFee();
             } catch (error) {
                 console.warn(`Client: failed to get relay fee from ${agent.peer.host}:`, error.message);
-                console.debug(error);
             }
         }
         throw new Error(`Failed to get relay fee`);
