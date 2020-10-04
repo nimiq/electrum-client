@@ -43,7 +43,7 @@ export class Agent extends Observable {
 
             this.connection = new ElectrumApi({
                 network: GenesisConfig.NETWORK_NAME,
-                endpoint: 'wss://api.nimiqwatch.com:50003', // SSL-enabled proxy
+                endpoint: 'wss://electrum.nimiq.network:50002', // SSL-enabled proxy
                 proxy: true,
                 token: `${this.networkToTokenPrefix(GenesisConfig.NETWORK_NAME)}:${peer.host}`
             });
@@ -52,7 +52,7 @@ export class Agent extends Observable {
 
             this.connection = new ElectrumApi({
                 network: GenesisConfig.NETWORK_NAME,
-                endpoint: 'wss://api.nimiqwatch.com:50002', // TCP proxy
+                endpoint: 'wss://electrum.nimiq.network:50001', // TCP proxy
                 proxy: true,
                 token: `${this.networkToTokenPrefix(GenesisConfig.NETWORK_NAME)}:${peer.host}`
             });
