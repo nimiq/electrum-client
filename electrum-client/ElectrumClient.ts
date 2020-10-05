@@ -4,7 +4,7 @@ import {
     Peer, PlainTransaction, PlainBlockHeader, Receipt,
 } from '../electrum-api/types';
 
-import { Agent, Event as AgentEvent } from './Agent';
+import { Agent, Event as AgentEvent, ElectrumAgentOptions } from './Agent';
 import {
     ConsensusState,
     TransactionState,
@@ -19,6 +19,10 @@ import { GenesisConfig, Network } from './GenesisConfig';
 
 type ElectrumClientOptions = {
     requiredBlockConfirmations: number,
+    websocketProxy?: {
+        tcp: string | false,
+        ssl: string | false,
+    },
 }
 
 export class ElectrumClient {
@@ -304,7 +308,13 @@ export class ElectrumClient {
 
         // Connect to network
         const peer = [...this.addressBook.values()][Math.floor(Math.random() * this.addressBook.size)];
-        const agent = new Agent(peer);
+        const agentOptions: ElectrumAgentOptions | undefined = this.options.websocketProxy
+            ? {
+                tcpProxyUrl: this.options.websocketProxy.tcp,
+                sslProxyUrl: this.options.websocketProxy.ssl,
+            }
+            : undefined;
+        const agent = new Agent(peer, agentOptions);
 
         agent.on(AgentEvent.SYNCING, () => this.onConsensusChanged(ConsensusState.SYNCING));
         agent.on(AgentEvent.SYNCED, () => {

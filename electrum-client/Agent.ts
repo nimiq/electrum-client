@@ -13,21 +13,33 @@ export enum Event {
     CLOSE = 'close',
 }
 
+export type ElectrumAgentOptions = {
+    tcpProxyUrl: string | false,
+    sslProxyUrl: string | false,
+}
+
 const HANDSHAKE_TIMEOUT = 3000;
 
 export class Agent extends Observable {
     public peer: Peer;
 
+    private options: ElectrumAgentOptions;
     private connection: ElectrumApi | null = null;
     private syncing = false;
     private synced = false;
     private orphanedBlocks: PlainBlockHeader[] = [];
     private knownReceipts = new Map</* address */ string, Map</* transactionHash */ string, Receipt>>();
 
-    constructor(peer: Peer) {
+    constructor(peer: Peer, options: Partial<ElectrumAgentOptions> = {}) {
         super();
 
         this.peer = peer;
+
+        this.options = {
+            tcpProxyUrl: 'wss://electrum.nimiq.network:50001',
+            sslProxyUrl: 'wss://electrum.nimiq.network:50002',
+            ...options,
+        };
 
         if (peer.ports.wss) {
             console.debug(`Agent: Connecting to wss://${peer.host}:${peer.ports.wss}`);
@@ -36,23 +48,22 @@ export class Agent extends Observable {
                 network: GenesisConfig.NETWORK_NAME,
                 endpoint: `wss://${peer.host}:${peer.ports.wss}`,
                 proxy: false,
-                // token: undefined,
             });
-        } else if (peer.ports.ssl) {
+        } else if (peer.ports.ssl && this.options.sslProxyUrl) {
             console.debug(`Agent: Connecting to ssl://${peer.host}:${peer.ports.ssl}`);
 
             this.connection = new ElectrumApi({
                 network: GenesisConfig.NETWORK_NAME,
-                endpoint: 'wss://electrum.nimiq.network:50002', // SSL-enabled proxy
+                endpoint: this.options.sslProxyUrl,
                 proxy: true,
                 token: `${this.networkToTokenPrefix(GenesisConfig.NETWORK_NAME)}:${peer.host}`
             });
-        } else if (peer.ports.tcp) {
+        } else if (peer.ports.tcp && this.options.tcpProxyUrl) {
             console.debug(`Agent: Connecting to tcp://${peer.host}:${peer.ports.tcp}`);
 
             this.connection = new ElectrumApi({
                 network: GenesisConfig.NETWORK_NAME,
-                endpoint: 'wss://electrum.nimiq.network:50001', // TCP proxy
+                endpoint: this.options.tcpProxyUrl,
                 proxy: true,
                 token: `${this.networkToTokenPrefix(GenesisConfig.NETWORK_NAME)}:${peer.host}`
             });
