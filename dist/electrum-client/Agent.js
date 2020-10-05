@@ -13,7 +13,7 @@ export var Event;
 })(Event || (Event = {}));
 const HANDSHAKE_TIMEOUT = 3000;
 export class Agent extends Observable {
-    constructor(peer) {
+    constructor(peer, options = {}) {
         super();
         this.connection = null;
         this.syncing = false;
@@ -21,6 +21,11 @@ export class Agent extends Observable {
         this.orphanedBlocks = [];
         this.knownReceipts = new Map();
         this.peer = peer;
+        this.options = {
+            tcpProxyUrl: 'wss://electrum.nimiq.network:50001',
+            sslProxyUrl: 'wss://electrum.nimiq.network:50002',
+            ...options,
+        };
         if (peer.ports.wss) {
             console.debug(`Agent: Connecting to wss://${peer.host}:${peer.ports.wss}`);
             this.connection = new ElectrumApi({
@@ -29,20 +34,20 @@ export class Agent extends Observable {
                 proxy: false,
             });
         }
-        else if (peer.ports.ssl) {
+        else if (peer.ports.ssl && this.options.sslProxyUrl) {
             console.debug(`Agent: Connecting to ssl://${peer.host}:${peer.ports.ssl}`);
             this.connection = new ElectrumApi({
                 network: GenesisConfig.NETWORK_NAME,
-                endpoint: 'wss://electrum.nimiq.network:50002',
+                endpoint: this.options.sslProxyUrl,
                 proxy: true,
                 token: `${this.networkToTokenPrefix(GenesisConfig.NETWORK_NAME)}:${peer.host}`
             });
         }
-        else if (peer.ports.tcp) {
+        else if (peer.ports.tcp && this.options.tcpProxyUrl) {
             console.debug(`Agent: Connecting to tcp://${peer.host}:${peer.ports.tcp}`);
             this.connection = new ElectrumApi({
                 network: GenesisConfig.NETWORK_NAME,
-                endpoint: 'wss://electrum.nimiq.network:50001',
+                endpoint: this.options.tcpProxyUrl,
                 proxy: true,
                 token: `${this.networkToTokenPrefix(GenesisConfig.NETWORK_NAME)}:${peer.host}`
             });

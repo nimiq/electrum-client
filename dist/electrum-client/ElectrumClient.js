@@ -247,7 +247,13 @@ export class ElectrumClient {
     async connect() {
         this.onConsensusChanged(ConsensusState.CONNECTING);
         const peer = [...this.addressBook.values()][Math.floor(Math.random() * this.addressBook.size)];
-        const agent = new Agent(peer);
+        const agentOptions = this.options.websocketProxy
+            ? {
+                tcpProxyUrl: this.options.websocketProxy.tcp,
+                sslProxyUrl: this.options.websocketProxy.ssl,
+            }
+            : undefined;
+        const agent = new Agent(peer, agentOptions);
         agent.on(AgentEvent.SYNCING, () => this.onConsensusChanged(ConsensusState.SYNCING));
         agent.on(AgentEvent.SYNCED, () => {
             this.agents.add(agent);
