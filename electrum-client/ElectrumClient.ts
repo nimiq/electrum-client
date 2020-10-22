@@ -137,7 +137,9 @@ export class ElectrumClient {
         // Remove unwanted history
         if (sinceBlockHeight > 0) {
             const firstUnwantedHistoryIndex = history.findIndex(receipt => receipt.blockHeight > 0 && receipt.blockHeight < sinceBlockHeight);
-            history = history.slice(0, firstUnwantedHistoryIndex);
+            if (firstUnwantedHistoryIndex > -1) {
+                history = history.slice(0, firstUnwantedHistoryIndex);
+            }
         }
 
         const blocks = new Map<number, PlainBlockHeader>();
@@ -221,6 +223,8 @@ export class ElectrumClient {
         if (!tx) {
             throw (sendError || new Error('Could not send transaction'));
         }
+
+        this.onPendingTransaction(tx);
 
         return {
             ...tx,

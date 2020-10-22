@@ -24,6 +24,7 @@ export const DEFAULT_TOKEN = 'mainnet:electrum.blockstream.info';
 
 const RECONNECT_TIMEOUT = 1000;
 const CLOSE_CODE = 1000; // 1000 indicates a normal closure, meaning that the purpose for which the connection was established has been fulfilled
+const CONNECTIVITY_CHECK_INTERVAL = 1000 * 60; // 1 minute
 
 export class ElectrumWS {
     private options: ElectrumWSOptions;
@@ -128,14 +129,14 @@ export class ElectrumWS {
     }
 
     private ping() {
-        this.request('server.ping');
+        this.request('server.ping').catch(() => {});
     }
 
     private async onOpen() {
         console.debug('ElectrumWS OPEN');
         this.connected = true;
         this.connectedResolver();
-        this.pingInterval = window.setInterval(this.ping.bind(this), 30 * 1000); // Send ping every 30s
+        this.pingInterval = window.setInterval(this.ping.bind(this), CONNECTIVITY_CHECK_INTERVAL);
 
         // Resubscribe to registered subscriptions
         for (const [subscriptionKey, callback] of this.subscriptions) {
