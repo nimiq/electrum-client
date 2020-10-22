@@ -18,7 +18,8 @@ export type ElectrumAgentOptions = {
     sslProxyUrl: string | false,
 }
 
-const HANDSHAKE_TIMEOUT = 3000;
+// Same as Nimiq v1.x NetworkAgent
+const HANDSHAKE_TIMEOUT = 1000 * 4; // 4 seconds
 
 export class Agent extends Observable {
     public peer: Peer;
