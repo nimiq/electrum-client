@@ -3,6 +3,7 @@ export const DEFAULT_ENDPOINT = 'wss://api.nimiqwatch.com:50002';
 export const DEFAULT_TOKEN = 'mainnet:electrum.blockstream.info';
 const RECONNECT_TIMEOUT = 1000;
 const CLOSE_CODE = 1000;
+const CONNECTIVITY_CHECK_INTERVAL = 1000 * 60;
 export class ElectrumWS {
     constructor(endpoint = DEFAULT_ENDPOINT, options = {}) {
         this.requests = new Map();
@@ -76,13 +77,13 @@ export class ElectrumWS {
         this.ws.addEventListener('close', this.onClose.bind(this));
     }
     ping() {
-        this.request('server.ping');
+        this.request('server.ping').catch(() => { });
     }
     async onOpen() {
         console.debug('ElectrumWS OPEN');
         this.connected = true;
         this.connectedResolver();
-        this.pingInterval = window.setInterval(this.ping.bind(this), 30 * 1000);
+        this.pingInterval = window.setInterval(this.ping.bind(this), CONNECTIVITY_CHECK_INTERVAL);
         for (const [subscriptionKey, callback] of this.subscriptions) {
             const params = subscriptionKey.split('-');
             const method = params.shift();

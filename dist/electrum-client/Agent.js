@@ -11,7 +11,7 @@ export var Event;
     Event["SYNCED"] = "synced";
     Event["CLOSE"] = "close";
 })(Event || (Event = {}));
-const HANDSHAKE_TIMEOUT = 3000;
+const HANDSHAKE_TIMEOUT = 1000 * 4;
 export class Agent extends Observable {
     constructor(peer, options = {}) {
         super();
