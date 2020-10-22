@@ -224,6 +224,8 @@ export class ElectrumClient {
             throw (sendError || new Error('Could not send transaction'));
         }
 
+        this.onPendingTransaction(tx);
+
         return {
             ...tx,
             state: TransactionState.PENDING,
