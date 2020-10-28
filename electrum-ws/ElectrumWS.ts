@@ -34,9 +34,9 @@ export class ElectrumWS {
     private subscriptions = new Map<string, (...payload: any[]) => any>();
 
     private connected = false;
-    private connectedPromise!: Promise<void>;
-    private connectedResolver!: () => void;
-    private connectedRejector!: () => void;
+    private connectedPromise = Promise.reject();
+    private connectedResolver = () => {};
+    private connectedRejector = () => {};
 
     private pingInterval: number = -1;
     private incompleteMessage = '';

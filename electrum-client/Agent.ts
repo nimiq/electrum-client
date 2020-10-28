@@ -191,7 +191,7 @@ export class Agent extends Observable {
                     this.close();
                     reject(new Error('Wrong genesis hash'));
                 }
-            });
+            }).catch(reject);
         });
     }
 
