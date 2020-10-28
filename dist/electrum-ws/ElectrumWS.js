@@ -9,7 +9,7 @@ export class ElectrumWS {
         this.requests = new Map();
         this.subscriptions = new Map();
         this.connected = false;
-        this.connectedPromise = Promise.reject();
+        this.connectedPromise = null;
         this.connectedResolver = () => { };
         this.connectedRejector = () => { };
         this.pingInterval = -1;
