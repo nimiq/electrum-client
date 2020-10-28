@@ -36,7 +36,7 @@ export class ElectrumWS {
     private connected = false;
     private connectedPromise: Promise<void> | null = null;
     private connectedResolver = () => {};
-    private connectedRejector = () => {};
+    private connectedRejector = (error: Error) => {};
 
     private pingInterval: number = -1;
     private incompleteMessage = '';
@@ -53,7 +53,6 @@ export class ElectrumWS {
         }, options);
 
         this.setupConnectedPromise();
-
         this.connect();
     }
 
@@ -119,13 +118,18 @@ export class ElectrumWS {
         if (this.options.token) {
             url = `${url}?token=${this.options.token}`;
         }
-        this.ws = new WebSocket(url, 'binary');
-        this.ws.binaryType = 'arraybuffer';
 
-        this.ws.addEventListener('open', this.onOpen.bind(this));
-        this.ws.addEventListener('message', this.onMessage.bind(this));
-        this.ws.addEventListener('error', this.onError.bind(this));
-        this.ws.addEventListener('close', this.onClose.bind(this));
+        try {
+            this.ws = new WebSocket(url, 'binary');
+            this.ws.binaryType = 'arraybuffer';
+
+            this.ws.addEventListener('open', this.onOpen.bind(this));
+            this.ws.addEventListener('message', this.onMessage.bind(this));
+            this.ws.addEventListener('error', this.onError.bind(this));
+            this.ws.addEventListener('close', this.onClose.bind(this));
+        } catch (error) {
+            this.onClose(error);
+        }
     }
 
     private ping() {
@@ -202,18 +206,20 @@ export class ElectrumWS {
     }
 
     private onError(event: Event) {
-        console.error('ElectrumWS ERROR:', event);
+        if ((event as ErrorEvent).error) console.error('ElectrumWS ERROR:', (event as ErrorEvent).error);
     }
 
-    private onClose(event: CloseEvent) {
-        console.warn('ElectrumWS CLOSED:', event);
+    private onClose(event: CloseEvent | Error) {
+        // console.debug('ElectrumWS CLOSED:', event);
+
         clearInterval(this.pingInterval);
-        this.connected = false;
-        this.connectedRejector();
+        // if (this.connected) this.connectedRejector(event instanceof Error ? event : new Error(`Electrum websocket closed (${event.code})`));
 
         if (this.options.reconnect) {
-            this.setupConnectedPromise();
+            if (this.connected) this.setupConnectedPromise();
             new Promise(resolve => setTimeout(resolve, RECONNECT_TIMEOUT)).then(() => this.connect());
         }
+
+        this.connected = false;
     }
 }
