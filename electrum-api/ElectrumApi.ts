@@ -149,7 +149,7 @@ export class ElectrumApi {
     }
 
     public async subscribeReceipts(address: string, callback: (receipts: Receipt[]) => any) {
-        this.socket.subscribe(
+        return this.socket.subscribe(
             'blockchain.scripthash',
             async (scriptHash: string, status: string | null) => {
                 callback(!status ? [] : await this.getReceipts(scriptHash));
@@ -159,7 +159,7 @@ export class ElectrumApi {
     }
 
     public async subscribeHeaders(callback: (header: PlainBlockHeader) => any) {
-        this.socket.subscribe('blockchain.headers', async (headerInfo: {height: number, hex: string}) => {
+        return this.socket.subscribe('blockchain.headers', (headerInfo: {height: number, hex: string}) => {
             callback(blockHeaderToPlain(headerInfo.hex, headerInfo.height));
         });
     }
@@ -236,7 +236,7 @@ export class ElectrumApi {
     }
 
     public close() {
-        this.socket.close();
+        return this.socket.close();
     }
 
     private async addressToScriptHash(addr: string) {
