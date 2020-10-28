@@ -38,6 +38,8 @@ export class ElectrumWS {
     private connectedResolver = () => {};
     private connectedRejector = (error: Error) => {};
 
+    private reconnectionTimeout = -1;
+
     private pingInterval: number = -1;
     private incompleteMessage = '';
 
@@ -103,6 +105,7 @@ export class ElectrumWS {
 
     public close() {
         this.options.reconnect = false;
+        window.clearTimeout(this.reconnectionTimeout);
         this.ws.close(CLOSE_CODE);
     }
 
@@ -213,11 +216,10 @@ export class ElectrumWS {
         // console.debug('ElectrumWS CLOSED:', event);
 
         clearInterval(this.pingInterval);
-        // if (this.connected) this.connectedRejector(event instanceof Error ? event : new Error(`Electrum websocket closed (${event.code})`));
 
         if (this.options.reconnect) {
             if (this.connected) this.setupConnectedPromise();
-            new Promise(resolve => setTimeout(resolve, RECONNECT_TIMEOUT)).then(() => this.connect());
+            this.reconnectionTimeout = window.setTimeout(() => this.connect(), RECONNECT_TIMEOUT);
         }
 
         this.connected = false;
