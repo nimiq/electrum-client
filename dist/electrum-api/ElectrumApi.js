@@ -86,12 +86,12 @@ export class ElectrumApi {
             throw new Error(hash);
     }
     async subscribeReceipts(address, callback) {
-        this.socket.subscribe('blockchain.scripthash', async (scriptHash, status) => {
+        return this.socket.subscribe('blockchain.scripthash', async (scriptHash, status) => {
             callback(!status ? [] : await this.getReceipts(scriptHash));
         }, await this.addressToScriptHash(address));
     }
     async subscribeHeaders(callback) {
-        this.socket.subscribe('blockchain.headers', async (headerInfo) => {
+        return this.socket.subscribe('blockchain.headers', (headerInfo) => {
             callback(blockHeaderToPlain(headerInfo.hex, headerInfo.height));
         });
     }
@@ -183,7 +183,7 @@ export class ElectrumApi {
         });
     }
     close() {
-        this.socket.close();
+        return this.socket.close();
     }
     async addressToScriptHash(addr) {
         const outputScript = BitcoinJS.address.toOutputScript(addr, this.options.network);

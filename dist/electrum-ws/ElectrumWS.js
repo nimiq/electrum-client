@@ -11,7 +11,7 @@ export class ElectrumWS {
         this.connected = false;
         this.connectedPromise = null;
         this.connectedResolver = () => { };
-        this.connectedRejector = () => { };
+        this.connectedRejector = (error) => { };
         this.pingInterval = -1;
         this.incompleteMessage = '';
         this.endpoint = endpoint;
@@ -72,12 +72,17 @@ export class ElectrumWS {
         if (this.options.token) {
             url = `${url}?token=${this.options.token}`;
         }
-        this.ws = new WebSocket(url, 'binary');
-        this.ws.binaryType = 'arraybuffer';
-        this.ws.addEventListener('open', this.onOpen.bind(this));
-        this.ws.addEventListener('message', this.onMessage.bind(this));
-        this.ws.addEventListener('error', this.onError.bind(this));
-        this.ws.addEventListener('close', this.onClose.bind(this));
+        try {
+            this.ws = new WebSocket(url, 'binary');
+            this.ws.binaryType = 'arraybuffer';
+            this.ws.addEventListener('open', this.onOpen.bind(this));
+            this.ws.addEventListener('message', this.onMessage.bind(this));
+            this.ws.addEventListener('error', this.onError.bind(this));
+            this.ws.addEventListener('close', this.onClose.bind(this));
+        }
+        catch (error) {
+            this.onClose(error);
+        }
     }
     ping() {
         this.request('server.ping').catch(() => { });
@@ -139,16 +144,16 @@ export class ElectrumWS {
         return false;
     }
     onError(event) {
-        console.error('ElectrumWS ERROR:', event);
+        if (event.error)
+            console.error('ElectrumWS ERROR:', event.error);
     }
     onClose(event) {
-        console.warn('ElectrumWS CLOSED:', event);
         clearInterval(this.pingInterval);
-        this.connected = false;
-        this.connectedRejector();
         if (this.options.reconnect) {
-            this.setupConnectedPromise();
+            if (this.connected)
+                this.setupConnectedPromise();
             new Promise(resolve => setTimeout(resolve, RECONNECT_TIMEOUT)).then(() => this.connect());
         }
+        this.connected = false;
     }
 }
