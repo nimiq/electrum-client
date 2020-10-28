@@ -34,7 +34,7 @@ export class ElectrumWS {
     private subscriptions = new Map<string, (...payload: any[]) => any>();
 
     private connected = false;
-    private connectedPromise = Promise.reject();
+    private connectedPromise: Promise<void> | null = null;
     private connectedResolver = () => {};
     private connectedRejector = () => {};
 
