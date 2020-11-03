@@ -142,8 +142,18 @@ export class ElectrumApi {
     }
 
     public async broadcastTransaction(rawTx: string): Promise<PlainTransaction> {
-        const hash = await this.socket.request('blockchain.transaction.broadcast', rawTx);
         const tx = transactionToPlain(rawTx, this.options.network);
+
+        let hash: string;
+        try {
+            hash = await this.socket.request('blockchain.transaction.broadcast', rawTx);
+        } catch (error) {
+            if ((error as Error).message.includes('Transaction already in block chain')) {
+                tx.onChain = true;
+                return tx;
+            } else throw error;
+        }
+
         if (hash === tx.transactionHash) return tx;
         else throw new Error(hash); // Protocol v1.0 returns errors as the result string
     }

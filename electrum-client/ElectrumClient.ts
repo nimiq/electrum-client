@@ -223,6 +223,15 @@ export class ElectrumClient {
             throw (sendError || new Error('Could not send transaction'));
         }
 
+        if (tx.onChain) {
+            // TODO: Get correct number of confirmations
+            return {
+                ...tx,
+                state: TransactionState.MINED,
+                confirmations: 1,
+            };
+        }
+
         this.onPendingTransaction(tx);
 
         return {
