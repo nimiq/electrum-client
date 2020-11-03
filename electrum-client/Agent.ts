@@ -216,9 +216,10 @@ export class Agent extends Observable {
         });
     }
 
-    private async ping() {
+    private async ping(failedTries = 0) {
         const timeout = setTimeout(() => {
-            this.close('Ping timeout');
+            if (failedTries > 1) this.close('Ping timeout');
+            else this.ping(failedTries + 1);
         }, PING_TIMEOUT);
 
         try {
