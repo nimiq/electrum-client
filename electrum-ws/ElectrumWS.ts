@@ -1,4 +1,4 @@
-import { stringToBytes, bytesToString } from "./helpers";
+import { stringToBytes, bytesToString } from './helpers';
 
 type RpcResponse = {
     jsonrpc: string,
@@ -113,6 +113,7 @@ export class ElectrumWS {
         // Reject all pending requests
         for (const [id, callbacks] of this.requests) {
             this.requests.delete(id);
+            console.debug('Rejecting pending request:', callbacks.method);
             callbacks.reject(new Error(reason));
         }
 
@@ -147,6 +148,7 @@ export class ElectrumWS {
 
     private async onOpen() {
         console.debug('ElectrumWS OPEN');
+
         this.connected = true;
         this.connectedResolver();
 
@@ -222,7 +224,7 @@ export class ElectrumWS {
     }
 
     private onClose(event: CloseEvent | Error) {
-        // console.debug('ElectrumWS CLOSED:', event);
+        console.debug('ElectrumWS CLOSE');
 
         if (this.options.reconnect) {
             if (this.connected) this.setupConnectedPromise();

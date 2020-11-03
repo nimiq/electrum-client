@@ -160,8 +160,7 @@ export class ElectrumClient {
                 }
 
                 try {
-                    // Validates merkle proof
-                    const tx = await this.getTransaction(transactionHash, block);
+                    const tx = await this.getTransaction(transactionHash, block); // Validates merkle proof
                     let confirmations = 0;
                     let state = TransactionState.PENDING;
                     if (block) {
@@ -435,7 +434,7 @@ export class ElectrumClient {
             agent.allOff(AgentEvent.CLOSE);
             this.agents.delete(agent);
         }
-        console.debug('Client: Consensus failed:', reason);
+        console.debug('Client: Consensus failed: last agent closed');
         this.connect();
     }
 
