@@ -235,8 +235,12 @@ export class ElectrumApi {
         });
     }
 
-    public close() {
-        return this.socket.close();
+    public ping(): Promise<null> {
+        return this.socket.request('server.ping');
+    }
+
+    public close(reason: string) {
+        return this.socket.close(reason);
     }
 
     private async addressToScriptHash(addr: string) {

@@ -318,6 +318,7 @@ export class ElectrumClient {
                 sslProxyUrl: this.options.websocketProxy.ssl,
             }
             : undefined;
+
         const agent = new Agent(peer, agentOptions);
 
         agent.on(AgentEvent.SYNCING, () => this.onConsensusChanged(ConsensusState.SYNCING));
@@ -333,8 +334,8 @@ export class ElectrumClient {
         try {
             await agent.sync();
         } catch (error) {
-            console.warn(error);
-            agent.close();
+            // console.warn(error);
+            agent.close(error.message);
             return;
         }
 
@@ -418,7 +419,16 @@ export class ElectrumClient {
     }
 
     private onConsensusFailed(agent: Agent, reason: string) {
-        this.agents.delete(agent);
+        if (agent) {
+            agent.allOff(AgentEvent.SYNCING);
+            agent.allOff(AgentEvent.SYNCED);
+            agent.allOff(AgentEvent.BLOCK);
+            agent.allOff(AgentEvent.TRANSACTION_ADDED);
+            agent.allOff(AgentEvent.TRANSACTION_MINED);
+            agent.allOff(AgentEvent.CLOSE);
+            this.agents.delete(agent);
+        }
+        console.debug('Client: Consensus failed:', reason);
         this.connect();
     }
 

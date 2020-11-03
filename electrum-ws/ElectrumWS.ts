@@ -24,13 +24,12 @@ export const DEFAULT_TOKEN = 'mainnet:electrum.blockstream.info';
 
 const RECONNECT_TIMEOUT = 1000;
 const CLOSE_CODE = 1000; // 1000 indicates a normal closure, meaning that the purpose for which the connection was established has been fulfilled
-const CONNECTIVITY_CHECK_INTERVAL = 1000 * 60; // 1 minute
 
 export class ElectrumWS {
     private options: ElectrumWSOptions;
     private endpoint: string;
 
-    private requests = new Map<number, {resolve: (result: any) => any, reject: (error: Error) => any}>();
+    private requests = new Map<number, {resolve: (result: any) => any, reject: (error: Error) => any, method: string}>();
     private subscriptions = new Map<string, (...payload: any[]) => any>();
 
     private connected = false;
@@ -40,7 +39,6 @@ export class ElectrumWS {
 
     private reconnectionTimeout = -1;
 
-    private pingInterval: number = -1;
     private incompleteMessage = '';
 
     public ws!: WebSocket;
@@ -71,14 +69,15 @@ export class ElectrumWS {
             id,
         };
 
+        await this.connectedPromise;
+
         const promise = new Promise((resolve, reject) => {
             this.requests.set(id, {
                 resolve,
                 reject,
+                method,
             });
         });
-
-        await this.connectedPromise;
 
         console.debug('ElectrumWS SEND:', method, ...params);
         this.ws.send(stringToBytes(JSON.stringify(payload) + (this.options.proxy ? '\n' : '')));
@@ -103,10 +102,25 @@ export class ElectrumWS {
         return this.request(`${method}.unsubscribe`, ...params);
     }
 
-    public close() {
+    public close(reason: string) {
         this.options.reconnect = false;
+
+        // Add an error handler, to prevent uncaught exceptions in case no request is currently awaiting it.
+        this.connectedPromise!.catch(() => {});
+
+        this.connectedRejector(new Error(reason));
+
+        // Reject all pending requests
+        for (const [id, callbacks] of this.requests) {
+            this.requests.delete(id);
+            callbacks.reject(new Error(reason));
+        }
+
         window.clearTimeout(this.reconnectionTimeout);
-        this.ws.close(CLOSE_CODE);
+
+        if (this.ws.readyState === WebSocket.CONNECTING || this.ws.readyState === WebSocket.OPEN) {
+            this.ws.close(CLOSE_CODE, reason);
+        }
     }
 
     private setupConnectedPromise() {
@@ -122,28 +136,19 @@ export class ElectrumWS {
             url = `${url}?token=${this.options.token}`;
         }
 
-        try {
-            this.ws = new WebSocket(url, 'binary');
-            this.ws.binaryType = 'arraybuffer';
+        this.ws = new WebSocket(url, 'binary');
+        this.ws.binaryType = 'arraybuffer';
 
-            this.ws.addEventListener('open', this.onOpen.bind(this));
-            this.ws.addEventListener('message', this.onMessage.bind(this));
-            this.ws.addEventListener('error', this.onError.bind(this));
-            this.ws.addEventListener('close', this.onClose.bind(this));
-        } catch (error) {
-            this.onClose(error);
-        }
-    }
-
-    private ping() {
-        this.request('server.ping').catch(() => {});
+        this.ws.addEventListener('open', this.onOpen.bind(this));
+        this.ws.addEventListener('message', this.onMessage.bind(this));
+        this.ws.addEventListener('error', this.onError.bind(this));
+        this.ws.addEventListener('close', this.onClose.bind(this));
     }
 
     private async onOpen() {
         console.debug('ElectrumWS OPEN');
         this.connected = true;
         this.connectedResolver();
-        this.pingInterval = window.setInterval(this.ping.bind(this), CONNECTIVITY_CHECK_INTERVAL);
 
         // Resubscribe to registered subscriptions
         for (const [subscriptionKey, callback] of this.subscriptions) {
@@ -214,8 +219,6 @@ export class ElectrumWS {
 
     private onClose(event: CloseEvent | Error) {
         // console.debug('ElectrumWS CLOSED:', event);
-
-        clearInterval(this.pingInterval);
 
         if (this.options.reconnect) {
             if (this.connected) this.setupConnectedPromise();

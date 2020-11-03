@@ -20,16 +20,21 @@ export type ElectrumAgentOptions = {
 
 // Same as Nimiq v1.x NetworkAgent
 const HANDSHAKE_TIMEOUT = 1000 * 4; // 4 seconds
+const PING_TIMEOUT = 1000 * 10; // 10 seconds
+const CONNECTIVITY_CHECK_INTERVAL = 1000 * 60; // 1 minute
+// const ANNOUNCE_ADDR_INTERVAL = 1000 * 60 * 10; // 10 minutes
 
 export class Agent extends Observable {
     public peer: Peer;
 
     private options: ElectrumAgentOptions;
     private connection: ElectrumApi | null = null;
+    private handshaking = false;
     private syncing = false;
     private synced = false;
     private orphanedBlocks: PlainBlockHeader[] = [];
     private knownReceipts = new Map</* address */ string, Map</* transactionHash */ string, Receipt>>();
+    private pingInterval: number = -1;
 
     constructor(peer: Peer, options: Partial<ElectrumAgentOptions> = {}) {
         super();
@@ -74,11 +79,14 @@ export class Agent extends Observable {
     }
 
     public async sync() {
-        if (this.syncing || this.synced) return;
+        if (this.handshaking || this.syncing || this.synced) return;
+
+        this.handshaking = true;
+        await this.handshake();
+        this.handshaking = false;
+
         this.syncing = true;
         this.fire(Event.SYNCING);
-
-        await this.handshake();
 
         const promise = new Promise<boolean>((resolve, reject) => {
             this.once(Event.BLOCK, () => {
@@ -150,12 +158,14 @@ export class Agent extends Observable {
         return this.connection!.getPeers();
     }
 
-    public close(reason?: string) {
-        if (this.connection) this.connection.close();
+    public close(reason: string) {
+        console.debug('Agent: Closed:', reason);
+        if (this.connection) this.connection.close(reason);
         this.connection = null;
         this.syncing = false;
         this.synced = false;
         this.fire(Event.CLOSE, reason);
+        clearInterval(this.pingInterval);
     }
 
     public on(event: Event, callback: Function) {
@@ -188,11 +198,24 @@ export class Agent extends Observable {
                 if (features.genesis_hash === GenesisConfig.GENESIS_HASH) {
                     resolve(true);
                 } else {
-                    this.close();
+                    this.close('Wrong genesis hash');
                     reject(new Error('Wrong genesis hash'));
                 }
             }).catch(reject);
         });
+    }
+
+    private async ping() {
+        const timeout = setTimeout(() => {
+            this.close('Ping timeout');
+        }, PING_TIMEOUT);
+
+        try {
+            await this.connection!.ping();
+            clearTimeout(timeout);
+        } catch (error) {
+            // Ignore
+        }
     }
 
     private requestHead() {
@@ -207,6 +230,7 @@ export class Agent extends Observable {
             this.syncing = false;
             this.synced = true;
             this.fire(Event.SYNCED);
+            this.pingInterval = window.setInterval(this.ping.bind(this), CONNECTIVITY_CHECK_INTERVAL);
         }
 
         // TODO: Move into Consensus
