@@ -38,6 +38,7 @@ export declare class ElectrumClient {
     waitForConsensusEstablished(): Promise<unknown>;
     private connect;
     private addPeers;
+    private removePeer;
     private getConfirmationHeight;
     private queueTransactionForConfirmation;
     private clearTransactionFromConfirm;

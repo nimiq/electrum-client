@@ -16,10 +16,12 @@ export declare class Agent extends Observable {
     peer: Peer;
     private options;
     private connection;
+    private handshaking;
     private syncing;
     private synced;
     private orphanedBlocks;
     private knownReceipts;
+    private pingInterval;
     constructor(peer: Peer, options?: Partial<ElectrumAgentOptions>);
     sync(): Promise<boolean | undefined>;
     getBalance(address: string): Promise<import("../electrum-api/types").Balance>;
@@ -31,12 +33,13 @@ export declare class Agent extends Observable {
     broadcastTransaction(rawTx: string): Promise<PlainTransaction>;
     subscribe(addresses: string | string[]): Promise<void>;
     getPeers(): Promise<Peer[]>;
-    close(reason?: string): void;
+    close(reason: string): void;
     on(event: Event, callback: Function): number;
     once(event: Event, callback: Function): void;
     off(event: Event, id: number): void;
     allOff(event: Event): void;
     private handshake;
+    private ping;
     private requestHead;
     private onBlock;
     private onReceipts;

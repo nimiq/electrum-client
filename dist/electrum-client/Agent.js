@@ -2,6 +2,8 @@ import { ElectrumApi } from '../electrum-api/ElectrumApi';
 import { Observable } from './Observable';
 import { GenesisConfig, Network } from './GenesisConfig';
 import { TransactionStore, BlockStore } from './Stores';
+import { name as CLIENT_NAME, version as CLIENT_VERSION } from '../package.json';
+const PROTOCOL_VERSION = '1.4';
 export var Event;
 (function (Event) {
     Event["BLOCK"] = "block";
@@ -12,14 +14,18 @@ export var Event;
     Event["CLOSE"] = "close";
 })(Event || (Event = {}));
 const HANDSHAKE_TIMEOUT = 1000 * 4;
+const PING_TIMEOUT = 1000 * 10;
+const CONNECTIVITY_CHECK_INTERVAL = 1000 * 60;
 export class Agent extends Observable {
     constructor(peer, options = {}) {
         super();
         this.connection = null;
+        this.handshaking = false;
         this.syncing = false;
         this.synced = false;
         this.orphanedBlocks = [];
         this.knownReceipts = new Map();
+        this.pingInterval = -1;
         this.peer = peer;
         this.options = {
             tcpProxyUrl: 'wss://electrum.nimiq.network:50001',
@@ -57,11 +63,13 @@ export class Agent extends Observable {
         }
     }
     async sync() {
-        if (this.syncing || this.synced)
+        if (this.handshaking || this.syncing || this.synced)
             return;
+        this.handshaking = true;
+        await this.handshake();
+        this.handshaking = false;
         this.syncing = true;
         this.fire(Event.SYNCING);
-        await this.handshake();
         const promise = new Promise((resolve, reject) => {
             this.once(Event.BLOCK, () => {
                 clearTimeout(timeout);
@@ -122,12 +130,14 @@ export class Agent extends Observable {
         return this.connection.getPeers();
     }
     close(reason) {
+        console.debug('Agent: Closed:', reason);
         if (this.connection)
-            this.connection.close();
+            this.connection.close(reason);
         this.connection = null;
         this.syncing = false;
         this.synced = false;
         this.fire(Event.CLOSE, reason);
+        clearInterval(this.pingInterval);
     }
     on(event, callback) {
         return super.on(event, callback);
@@ -145,19 +155,41 @@ export class Agent extends Observable {
         if (!this.connection) {
             throw new Error('Agent not connected');
         }
-        return new Promise((resolve, reject) => {
+        return new Promise(async (resolve, reject) => {
             const timeout = setTimeout(() => reject(new Error('Handshake timeout')), HANDSHAKE_TIMEOUT);
-            this.connection.getFeatures().then(features => {
-                clearTimeout(timeout);
-                if (features.genesis_hash === GenesisConfig.GENESIS_HASH) {
-                    resolve(true);
-                }
-                else {
-                    this.close();
-                    reject(new Error('Wrong genesis hash'));
-                }
-            }).catch(reject);
+            try {
+                await this.connection.setProtocolVersion(`${CLIENT_NAME} ${CLIENT_VERSION}`, PROTOCOL_VERSION);
+            }
+            catch (error) {
+                reject(new Error('Incompatible protocol version'));
+                return;
+            }
+            try {
+                const features = await this.connection.getFeatures();
+                if (features.genesis_hash !== GenesisConfig.GENESIS_HASH)
+                    throw new Error('Wrong genesis hash');
+            }
+            catch (error) {
+                reject(error);
+                return;
+            }
+            clearTimeout(timeout);
+            resolve(true);
         });
+    }
+    async ping(failedTries = 0) {
+        const timeout = setTimeout(() => {
+            if (failedTries > 1)
+                this.close('Ping timeout');
+            else
+                this.ping(failedTries + 1);
+        }, PING_TIMEOUT);
+        try {
+            await this.connection.ping();
+            clearTimeout(timeout);
+        }
+        catch (error) {
+        }
     }
     requestHead() {
         if (!this.connection) {
@@ -170,6 +202,7 @@ export class Agent extends Observable {
             this.syncing = false;
             this.synced = true;
             this.fire(Event.SYNCED);
+            this.pingInterval = window.setInterval(this.ping.bind(this), CONNECTIVITY_CHECK_INTERVAL);
         }
         let prevBlock = BlockStore.get(block.blockHeight - 1);
         if (!prevBlock && block.blockHeight > 0) {

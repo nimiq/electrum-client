@@ -270,8 +270,8 @@ export class ElectrumClient {
             await agent.sync();
         }
         catch (error) {
-            console.warn(error);
-            agent.close();
+            this.removePeer(agent.peer);
+            agent.close(error.message);
             return;
         }
         this.addPeers(await agent.getPeers());
@@ -289,6 +289,11 @@ export class ElectrumClient {
         for (const peer of peers) {
             this.addressBook.set(peer.host, peer);
         }
+    }
+    removePeer(peer) {
+        if (GenesisConfig.SEED_PEERS.find(seed => seed.host === peer.host))
+            return;
+        this.addressBook.delete(peer.host);
     }
     getConfirmationHeight(blockHeight) {
         return blockHeight + this.options.requiredBlockConfirmations - 1;
@@ -333,7 +338,16 @@ export class ElectrumClient {
         }
     }
     onConsensusFailed(agent, reason) {
-        this.agents.delete(agent);
+        if (agent) {
+            agent.allOff(AgentEvent.SYNCING);
+            agent.allOff(AgentEvent.SYNCED);
+            agent.allOff(AgentEvent.BLOCK);
+            agent.allOff(AgentEvent.TRANSACTION_ADDED);
+            agent.allOff(AgentEvent.TRANSACTION_MINED);
+            agent.allOff(AgentEvent.CLOSE);
+            this.agents.delete(agent);
+        }
+        console.debug('Client: Consensus failed: last agent closed');
         this.connect();
     }
     async onHeadChanged(block, reason, revertedBlocks, adoptedBlocks) {

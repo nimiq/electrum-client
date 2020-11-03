@@ -95,6 +95,9 @@ export class ElectrumApi {
             callback(blockHeaderToPlain(headerInfo.hex, headerInfo.height));
         });
     }
+    async setProtocolVersion(clientName, protocolVersion) {
+        return this.socket.request('server.version', clientName, protocolVersion);
+    }
     async getFeatures() {
         return this.socket.request('server.features');
     }
@@ -182,8 +185,11 @@ export class ElectrumApi {
             };
         });
     }
-    close() {
-        return this.socket.close();
+    ping() {
+        return this.socket.request('server.ping');
+    }
+    close(reason) {
+        return this.socket.close(reason);
     }
     async addressToScriptHash(addr) {
         const outputScript = BitcoinJS.address.toOutputScript(addr, this.options.network);

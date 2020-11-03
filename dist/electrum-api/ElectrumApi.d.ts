@@ -24,8 +24,10 @@ export declare class ElectrumApi {
     broadcastTransaction(rawTx: string): Promise<PlainTransaction>;
     subscribeReceipts(address: string, callback: (receipts: Receipt[]) => any): Promise<void>;
     subscribeHeaders(callback: (header: PlainBlockHeader) => any): Promise<void>;
+    setProtocolVersion(clientName: string, protocolVersion: string): Promise<string[]>;
     getFeatures(): Promise<PeerFeatures>;
     getPeers(): Promise<Peer[]>;
-    close(): void;
+    ping(): Promise<null>;
+    close(reason: string): void;
     private addressToScriptHash;
 }

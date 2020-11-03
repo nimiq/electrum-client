@@ -1,4 +1,4 @@
-import { PlainTransaction, PlainBlockHeader } from "../electrum-api";
+import { PlainTransaction, PlainBlockHeader } from '../electrum-api';
 export declare enum ConsensusState {
     CONNECTING = "connecting",
     SYNCING = "syncing",
