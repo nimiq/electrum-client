@@ -171,6 +171,13 @@ export class ElectrumClient {
         if (!tx) {
             throw (sendError || new Error('Could not send transaction'));
         }
+        if (tx.onChain) {
+            return {
+                ...tx,
+                state: TransactionState.MINED,
+                confirmations: 1,
+            };
+        }
         this.onPendingTransaction(tx);
         return {
             ...tx,

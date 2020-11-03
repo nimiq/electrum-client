@@ -126,10 +126,15 @@ export class ElectrumWS {
                 const request = this.requests.get(response.id);
                 window.clearTimeout(request.timeout);
                 this.requests.delete(response.id);
-                if ("result" in response)
+                if (response.result) {
                     request.resolve(response.result);
-                else
-                    request.reject(new Error(response.error || 'No result'));
+                }
+                else if (response.error) {
+                    request.reject(new Error(typeof response.error === 'string' ? response.error : response.error.message));
+                }
+                else {
+                    request.reject(new Error('No result'));
+                }
             }
             if ('method' in response && (response.method).endsWith('subscribe')) {
                 const method = response.method.replace('.subscribe', '');

@@ -78,8 +78,19 @@ export class ElectrumApi {
         return Math.round(coins * 1e8);
     }
     async broadcastTransaction(rawTx) {
-        const hash = await this.socket.request('blockchain.transaction.broadcast', rawTx);
         const tx = transactionToPlain(rawTx, this.options.network);
+        let hash;
+        try {
+            hash = await this.socket.request('blockchain.transaction.broadcast', rawTx);
+        }
+        catch (error) {
+            if (error.message.includes('Transaction already in block chain')) {
+                tx.onChain = true;
+                return tx;
+            }
+            else
+                throw error;
+        }
         if (hash === tx.transactionHash)
             return tx;
         else
