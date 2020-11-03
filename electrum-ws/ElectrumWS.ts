@@ -13,6 +13,13 @@ type RpcRequest = {
     params?: any[],
 }
 
+type Request = {
+    resolve: (result: any) => any,
+    reject: (error: Error) => any,
+    method: string,
+    timeout: number,
+}
+
 export type ElectrumWSOptions = {
     proxy: boolean,
     token?: string,
@@ -23,13 +30,14 @@ export const DEFAULT_ENDPOINT = 'wss://api.nimiqwatch.com:50002';
 export const DEFAULT_TOKEN = 'mainnet:electrum.blockstream.info';
 
 const RECONNECT_TIMEOUT = 1000;
+const REQUEST_TIMEOUT = 1000 * 10; // 10 seconds
 const CLOSE_CODE = 1000; // 1000 indicates a normal closure, meaning that the purpose for which the connection was established has been fulfilled
 
 export class ElectrumWS {
     private options: ElectrumWSOptions;
     private endpoint: string;
 
-    private requests = new Map<number, {resolve: (result: any) => any, reject: (error: Error) => any, method: string}>();
+    private requests = new Map<number, Request>();
     private subscriptions = new Map<string, (...payload: any[]) => any>();
 
     private connected = false;
@@ -72,10 +80,16 @@ export class ElectrumWS {
         await this.connectedPromise;
 
         const promise = new Promise((resolve, reject) => {
+            const timeout = window.setTimeout(() => {
+                this.requests.delete(id);
+                reject(new Error('Request timeout'));
+            }, REQUEST_TIMEOUT);
+
             this.requests.set(id, {
                 resolve,
                 reject,
                 method,
+                timeout,
             });
         });
 
@@ -111,10 +125,11 @@ export class ElectrumWS {
         this.connectedRejector(new Error(reason));
 
         // Reject all pending requests
-        for (const [id, callbacks] of this.requests) {
+        for (const [id, request] of this.requests) {
+            window.clearTimeout(request.timeout);
             this.requests.delete(id);
-            console.debug('Rejecting pending request:', callbacks.method);
-            callbacks.reject(new Error(reason));
+            console.debug('Rejecting pending request:', request.method);
+            request.reject(new Error(reason));
         }
 
         window.clearTimeout(this.reconnectionTimeout);
@@ -179,11 +194,12 @@ export class ElectrumWS {
             console.debug('ElectrumWS MSG:', response);
 
             if ('id' in response && this.requests.has(response.id)) {
-                const callbacks = this.requests.get(response.id)!;
+                const request = this.requests.get(response.id)!;
+                window.clearTimeout(request.timeout);
                 this.requests.delete(response.id);
 
-                if ("result" in response) callbacks.resolve(response.result);
-                else callbacks.reject(new Error(response.error || 'No result'));
+                if ("result" in response) request.resolve(response.result);
+                else request.reject(new Error(response.error || 'No result'));
             }
 
             if ('method' in response && /** @type {string} */ (response.method).endsWith('subscribe')) {
