@@ -3,6 +3,9 @@ import { Observable } from './Observable';
 import { PlainBlockHeader, Peer, Receipt, PlainTransaction } from '../electrum-api/types';
 import { GenesisConfig, Network } from './GenesisConfig';
 import { TransactionStore, BlockStore } from './Stores';
+import { name as CLIENT_NAME, version as CLIENT_VERSION } from '../package.json';
+
+const PROTOCOL_VERSION = '1.4';
 
 export enum Event {
     BLOCK = 'block',
@@ -189,19 +192,27 @@ export class Agent extends Observable {
             throw new Error('Agent not connected');
         }
 
-        return new Promise<boolean>((resolve, reject) => {
+        return new Promise<boolean>(async (resolve, reject) => {
             const timeout = setTimeout(() => reject(new Error('Handshake timeout')), HANDSHAKE_TIMEOUT);
 
-            this.connection!.getFeatures().then(features => {
-                clearTimeout(timeout);
+            try {
+                await this.connection!.setProtocolVersion(`${CLIENT_NAME} ${CLIENT_VERSION}`, PROTOCOL_VERSION);
+            } catch (error) {
+                reject(new Error('Incompatible protocol version'));
+                return;
+            }
 
-                if (features.genesis_hash === GenesisConfig.GENESIS_HASH) {
-                    resolve(true);
-                } else {
-                    this.close('Wrong genesis hash');
-                    reject(new Error('Wrong genesis hash'));
-                }
-            }).catch(reject);
+            try {
+                const features = await this.connection!.getFeatures();
+                if (features.genesis_hash !== GenesisConfig.GENESIS_HASH) throw new Error('Wrong genesis hash');
+            } catch (error) {
+                reject(error);
+                return;
+            }
+
+            clearTimeout(timeout);
+
+            resolve(true);
         });
     }
 
