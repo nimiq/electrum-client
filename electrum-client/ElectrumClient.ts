@@ -335,6 +335,7 @@ export class ElectrumClient {
             await agent.sync();
         } catch (error) {
             // console.warn(error);
+            this.removePeer(agent.peer);
             agent.close(error.message);
             return;
         }
@@ -363,6 +364,12 @@ export class ElectrumClient {
         for (const peer of peers) {
             this.addressBook.set(peer.host, peer);
         }
+    }
+
+    private removePeer(peer: Peer) {
+        // Only remove non-seedlist peers
+        if (GenesisConfig.SEED_PEERS.find(seed => seed.host === peer.host)) return;
+        this.addressBook.delete(peer.host);
     }
 
     private getConfirmationHeight(blockHeight: number) {
