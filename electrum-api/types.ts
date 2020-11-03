@@ -36,6 +36,7 @@ export type PlainTransaction = {
     weight: number,
     locktime: number,
     replaceByFee: boolean,
+    onChain?: boolean,
 }
 
 export type PlainBlockHeader = {
