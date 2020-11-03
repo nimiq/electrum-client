@@ -158,7 +158,11 @@ export class ElectrumWS {
                 console.warn('Cannot resubscribe, no method in subscription key:', subscriptionKey);
                 continue;
             }
-            this.subscribe(method, callback, ...params);
+            this.subscribe(method, callback, ...params).catch((error) => {
+                if (this.ws.readyState === WebSocket.CONNECTING || this.ws.readyState === WebSocket.OPEN) {
+                    this.ws.close(CLOSE_CODE, error.message);
+                }
+            });
         }
     }
 
