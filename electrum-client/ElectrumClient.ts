@@ -160,8 +160,7 @@ export class ElectrumClient {
                 }
 
                 try {
-                    // Validates merkle proof
-                    const tx = await this.getTransaction(transactionHash, block);
+                    const tx = await this.getTransaction(transactionHash, block); // Validates merkle proof
                     let confirmations = 0;
                     let state = TransactionState.PENDING;
                     if (block) {
@@ -318,6 +317,7 @@ export class ElectrumClient {
                 sslProxyUrl: this.options.websocketProxy.ssl,
             }
             : undefined;
+
         const agent = new Agent(peer, agentOptions);
 
         agent.on(AgentEvent.SYNCING, () => this.onConsensusChanged(ConsensusState.SYNCING));
@@ -333,8 +333,9 @@ export class ElectrumClient {
         try {
             await agent.sync();
         } catch (error) {
-            console.warn(error);
-            agent.close();
+            // console.warn(error);
+            this.removePeer(agent.peer);
+            agent.close(error.message);
             return;
         }
 
@@ -362,6 +363,12 @@ export class ElectrumClient {
         for (const peer of peers) {
             this.addressBook.set(peer.host, peer);
         }
+    }
+
+    private removePeer(peer: Peer) {
+        // Only remove non-seedlist peers
+        if (GenesisConfig.SEED_PEERS.find(seed => seed.host === peer.host)) return;
+        this.addressBook.delete(peer.host);
     }
 
     private getConfirmationHeight(blockHeight: number) {
@@ -418,7 +425,16 @@ export class ElectrumClient {
     }
 
     private onConsensusFailed(agent: Agent, reason: string) {
-        this.agents.delete(agent);
+        if (agent) {
+            agent.allOff(AgentEvent.SYNCING);
+            agent.allOff(AgentEvent.SYNCED);
+            agent.allOff(AgentEvent.BLOCK);
+            agent.allOff(AgentEvent.TRANSACTION_ADDED);
+            agent.allOff(AgentEvent.TRANSACTION_MINED);
+            agent.allOff(AgentEvent.CLOSE);
+            this.agents.delete(agent);
+        }
+        console.debug('Client: Consensus failed: last agent closed');
         this.connect();
     }
 

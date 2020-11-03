@@ -164,6 +164,10 @@ export class ElectrumApi {
         });
     }
 
+    public async setProtocolVersion(clientName: string, protocolVersion: string): Promise<string[]> {
+        return this.socket.request('server.version', clientName, protocolVersion);
+    }
+
     public async getFeatures(): Promise<PeerFeatures> {
         return this.socket.request('server.features');
     }
@@ -235,8 +239,12 @@ export class ElectrumApi {
         });
     }
 
-    public close() {
-        return this.socket.close();
+    public ping(): Promise<null> {
+        return this.socket.request('server.ping');
+    }
+
+    public close(reason: string) {
+        return this.socket.close(reason);
     }
 
     private async addressToScriptHash(addr: string) {
