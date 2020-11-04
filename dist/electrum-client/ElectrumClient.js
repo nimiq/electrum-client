@@ -157,6 +157,7 @@ export class ElectrumClient {
         return txs;
     }
     async sendTransaction(serializedTx) {
+        var _a, _b;
         let tx;
         let sendError;
         for (const agent of this.agents) {
@@ -172,11 +173,11 @@ export class ElectrumClient {
             throw (sendError || new Error('Could not send transaction'));
         }
         if (tx.onChain) {
-            return {
-                ...tx,
-                state: TransactionState.MINED,
-                confirmations: 1,
-            };
+            const address = ((_a = tx.inputs.find(input => input.address)) === null || _a === void 0 ? void 0 : _a.address) || ((_b = tx.outputs.find(output => output.address)) === null || _b === void 0 ? void 0 : _b.address);
+            const receipts = await this.getTransactionReceiptsByAddress(address);
+            const blockHeight = receipts.find(receipt => receipt.transactionHash === tx.transactionHash).blockHeight;
+            const block = await this.getBlockAt(blockHeight);
+            return this.onMinedTransaction(block, tx, this.head || undefined);
         }
         this.onPendingTransaction(tx);
         return {
@@ -391,46 +392,50 @@ export class ElectrumClient {
         }
     }
     onPendingTransaction(tx) {
+        const details = {
+            ...tx,
+            state: TransactionState.PENDING,
+            confirmations: 0,
+        };
         for (const { listener } of this.getListenersForTransaction(tx)) {
-            listener({
-                ...tx,
-                state: TransactionState.PENDING,
-                confirmations: 0,
-            });
+            listener(details);
         }
         this.clearTransactionFromConfirm(tx);
+        return details;
     }
     onMinedTransaction(block, tx, blockNow) {
-        let details = undefined;
+        let state = TransactionState.MINED;
+        let confirmations = 1;
+        if (blockNow) {
+            confirmations = (blockNow.blockHeight - block.blockHeight) + 1;
+            state = confirmations >= this.options.requiredBlockConfirmations ? TransactionState.CONFIRMED : TransactionState.MINED;
+        }
+        const details = {
+            ...tx,
+            blockHash: block.blockHash,
+            blockHeight: block.blockHeight,
+            timestamp: block.timestamp,
+            state,
+            confirmations,
+        };
         for (const { listener } of this.getListenersForTransaction(tx)) {
-            let state = TransactionState.MINED;
-            let confirmations = 1;
-            if (blockNow) {
-                confirmations = (blockNow.blockHeight - block.blockHeight) + 1;
-                state = confirmations >= this.options.requiredBlockConfirmations ? TransactionState.CONFIRMED : TransactionState.MINED;
-            }
-            details = details || {
-                ...tx,
-                blockHash: block.blockHash,
-                blockHeight: block.blockHeight,
-                timestamp: block.timestamp,
-                state,
-                confirmations,
-            };
             listener(details);
         }
         if (details && details.state === TransactionState.MINED) {
             this.queueTransactionForConfirmation(details);
         }
+        return details;
     }
     onConfirmedTransaction(tx, blockNow) {
+        const details = {
+            ...tx,
+            state: TransactionState.CONFIRMED,
+            confirmations: blockNow.blockHeight - tx.blockHeight,
+        };
         for (const { listener } of this.getListenersForTransaction(tx)) {
-            listener({
-                ...tx,
-                state: TransactionState.CONFIRMED,
-                confirmations: blockNow.blockHeight - tx.blockHeight,
-            });
+            listener(details);
         }
+        return details;
     }
     getListenersForTransaction(tx) {
         return [...this.transactionListeners.values()].filter(({ addresses }) => tx.inputs.some(input => input.address && addresses.has(input.address))
