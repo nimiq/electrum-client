@@ -126,7 +126,7 @@ export class ElectrumWS {
                 const request = this.requests.get(response.id);
                 window.clearTimeout(request.timeout);
                 this.requests.delete(response.id);
-                if (response.result) {
+                if ('result' in response) {
                     request.resolve(response.result);
                 }
                 else if (response.error) {
