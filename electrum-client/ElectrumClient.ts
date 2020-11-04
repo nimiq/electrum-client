@@ -224,12 +224,13 @@ export class ElectrumClient {
         }
 
         if (tx.onChain) {
-            // TODO: Get correct number of confirmations
-            return {
-                ...tx,
-                state: TransactionState.MINED,
-                confirmations: 1,
-            };
+            // Get correct number of confirmations
+            const address = tx.inputs.find(input => input.address)?.address
+                || tx.outputs.find(output => output.address)?.address!;
+            const receipts = await this.getTransactionReceiptsByAddress(address);
+            const blockHeight = receipts.find(receipt => receipt.transactionHash === tx!.transactionHash)!.blockHeight;
+            const block = await this.getBlockAt(blockHeight);
+            return this.onMinedTransaction(block, tx, this.head || undefined);
         }
 
         this.onPendingTransaction(tx);
@@ -492,48 +493,60 @@ export class ElectrumClient {
     }
 
     private onPendingTransaction(tx: PlainTransaction) {
+        const details: TransactionDetails = {
+            ...tx,
+            state: TransactionState.PENDING,
+            confirmations: 0,
+        };
+
         for (const { listener } of this.getListenersForTransaction(tx)) {
-            listener({
-                ...tx,
-                state: TransactionState.PENDING,
-                confirmations: 0,
-            });
+            listener(details);
         }
+
         this.clearTransactionFromConfirm(tx);
+
+        return details;
     }
 
     private onMinedTransaction(block: PlainBlockHeader, tx: PlainTransaction, blockNow?: PlainBlockHeader) {
-        let details: TransactionDetails | undefined = undefined;
+        let state = TransactionState.MINED;
+        let confirmations = 1;
+        if (blockNow) {
+            confirmations = (blockNow.blockHeight - block.blockHeight) + 1;
+            state = confirmations >= this.options.requiredBlockConfirmations ? TransactionState.CONFIRMED : TransactionState.MINED;
+        }
+        const details: TransactionDetails = {
+            ...tx,
+            blockHash: block.blockHash,
+            blockHeight: block.blockHeight,
+            timestamp: block.timestamp,
+            state,
+            confirmations,
+        };
+
         for (const { listener } of this.getListenersForTransaction(tx)) {
-            let state = TransactionState.MINED;
-            let confirmations = 1;
-            if (blockNow) {
-                confirmations = (blockNow.blockHeight - block.blockHeight) + 1;
-                state = confirmations >= this.options.requiredBlockConfirmations ? TransactionState.CONFIRMED : TransactionState.MINED;
-            }
-            details = details || {
-                ...tx,
-                blockHash: block.blockHash,
-                blockHeight: block.blockHeight,
-                timestamp: block.timestamp,
-                state,
-                confirmations,
-            }
             listener(details);
         }
+
         if (details && details.state === TransactionState.MINED) {
             this.queueTransactionForConfirmation(details);
         }
+
+        return details;
     }
 
     private onConfirmedTransaction(tx: TransactionDetails, blockNow: PlainBlockHeader) {
+        const details: TransactionDetails = {
+            ...tx,
+            state: TransactionState.CONFIRMED,
+            confirmations: blockNow.blockHeight - tx.blockHeight!,
+        };
+
         for (const { listener } of this.getListenersForTransaction(tx)) {
-            listener({
-                ...tx,
-                state: TransactionState.CONFIRMED,
-                confirmations: blockNow.blockHeight - tx.blockHeight!,
-            });
+            listener(details);
         }
+
+        return details;
     }
 
     private getListenersForTransaction(tx: PlainTransaction) {
