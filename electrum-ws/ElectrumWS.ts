@@ -201,7 +201,7 @@ export class ElectrumWS {
                 window.clearTimeout(request.timeout);
                 this.requests.delete(response.id);
 
-                if (response.result) {
+                if ('result' in response) {
                     request.resolve(response.result);
                 } else if (response.error) {
                     request.reject(new Error(typeof response.error === 'string' ? response.error : response.error.message));
