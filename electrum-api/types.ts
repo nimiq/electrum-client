@@ -65,6 +65,12 @@ export type PeerFeatures = {
     pruning: number | null,
 }
 
+export enum Transport {
+    TCP = 1,
+    SSL = 2,
+    WSS = 3,
+}
+
 export type Peer = {
     ip: string,
     host: string,
@@ -75,4 +81,5 @@ export type Peer = {
         wss: number | null,
     },
     pruningLimit?: number,
+    preferTransport?: Transport,
 }

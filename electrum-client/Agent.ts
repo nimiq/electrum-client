@@ -1,6 +1,6 @@
 import { ElectrumApi } from '../electrum-api/ElectrumApi';
 import { Observable } from './Observable';
-import { PlainBlockHeader, Peer, Receipt, PlainTransaction } from '../electrum-api/types';
+import { PlainBlockHeader, Peer, Receipt, PlainTransaction, Transport } from '../electrum-api/types';
 import { GenesisConfig, Network } from './GenesisConfig';
 import { TransactionStore, BlockStore } from './Stores';
 import { name as CLIENT_NAME, version as CLIENT_VERSION } from '../package.json';
@@ -29,6 +29,7 @@ const CONNECTIVITY_CHECK_INTERVAL = 1000 * 60; // 1 minute
 
 export class Agent extends Observable {
     public peer: Peer;
+    public transport: Transport;
 
     private options: ElectrumAgentOptions;
     private connection: ElectrumApi | null = null;
@@ -50,26 +51,34 @@ export class Agent extends Observable {
             ...options,
         };
 
-        if (peer.ports.wss) {
+        // If a preferred transport protocol is given and this transport exists on the peer, enforce it
+        const transport = this.peer.preferTransport && peer.ports[this.transportToString(this.peer.preferTransport)]
+            ? this.peer.preferTransport
+            : undefined;
+
+        if (peer.ports.wss && (!transport || transport === Transport.WSS)) {
             console.debug(`Agent: Connecting to wss://${peer.host}:${peer.ports.wss}`);
 
+            this.transport = Transport.WSS;
             this.connection = new ElectrumApi({
                 network: GenesisConfig.NETWORK_NAME,
                 endpoint: `wss://${peer.host}:${peer.ports.wss}`,
                 proxy: false,
             });
-        } else if (peer.ports.ssl && this.options.sslProxyUrl) {
+        } else if (peer.ports.ssl && this.options.sslProxyUrl && (!transport || transport === Transport.SSL)) {
             console.debug(`Agent: Connecting to ssl://${peer.host}:${peer.ports.ssl}`);
 
+            this.transport = Transport.SSL;
             this.connection = new ElectrumApi({
                 network: GenesisConfig.NETWORK_NAME,
                 endpoint: this.options.sslProxyUrl,
                 proxy: true,
                 token: `${this.networkToTokenPrefix(GenesisConfig.NETWORK_NAME)}:${peer.host}`
             });
-        } else if (peer.ports.tcp && this.options.tcpProxyUrl) {
+        } else if (peer.ports.tcp && this.options.tcpProxyUrl && (!transport || transport === Transport.TCP)) {
             console.debug(`Agent: Connecting to tcp://${peer.host}:${peer.ports.tcp}`);
 
+            this.transport = Transport.TCP;
             this.connection = new ElectrumApi({
                 network: GenesisConfig.NETWORK_NAME,
                 endpoint: this.options.tcpProxyUrl,
@@ -77,7 +86,7 @@ export class Agent extends Observable {
                 token: `${this.networkToTokenPrefix(GenesisConfig.NETWORK_NAME)}:${peer.host}`
             });
         } else {
-            throw new Error('No suitable connection protocol and port for peer');
+            throw new Error('No suitable transport protocol and port for peer');
         }
     }
 
@@ -303,5 +312,13 @@ export class Agent extends Observable {
     private networkToTokenPrefix(name: string) {
         if (name === Network.MAIN) return 'mainnet';
         if (name === Network.TEST) return 'testnet';
+    }
+
+    private transportToString(transport: Transport) {
+        switch (transport) {
+            case Transport.WSS: return 'wss';
+            case Transport.SSL: return 'ssl';
+            case Transport.TCP: return 'tcp';
+        }
     }
 }

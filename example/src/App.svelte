@@ -23,7 +23,7 @@
 	let consensus = 'connecting';
 	let head = null;
 
-	GenesisConfig.mainnet();
+	GenesisConfig.main();
 
 	const client = new ElectrumClient();
 	window.client = client;

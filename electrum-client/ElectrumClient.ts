@@ -1,8 +1,5 @@
-import * as BitcoinJS from 'bitcoinjs-lib';
-import { transactionFromPlain, transactionToPlain } from '../electrum-api';
-import {
-    Peer, PlainTransaction, PlainBlockHeader, Receipt,
-} from '../electrum-api/types';
+import { transactionFromPlain } from '../electrum-api';
+import { Peer, PlainTransaction, PlainBlockHeader, Transport } from '../electrum-api/types';
 
 import { Agent, Event as AgentEvent, ElectrumAgentOptions } from './Agent';
 import {
@@ -344,7 +341,7 @@ export class ElectrumClient {
             await agent.sync();
         } catch (error) {
             // console.warn(error);
-            this.removePeer(agent.peer);
+            this.removePeer(agent.peer, agent.transport);
             agent.close(error.message);
             return;
         }
@@ -375,7 +372,26 @@ export class ElectrumClient {
         }
     }
 
-    private removePeer(peer: Peer) {
+    private removePeer(peer: Peer, transport: Transport) {
+        switch (transport) {
+            case Transport.WSS:
+                if (peer.ports['ssl']) {
+                    peer.preferTransport = Transport.SSL;
+                    this.addressBook.set(peer.host, peer);
+                    return;
+                } // Fallthrough on purpose
+            case Transport.SSL:
+                if (peer.ports['tcp']) {
+                    peer.preferTransport = Transport.TCP;
+                    this.addressBook.set(peer.host, peer);
+                    return;
+                } // Fallthrough on purpose
+            case Transport.TCP:
+                delete peer.preferTransport;
+                this.addressBook.set(peer.host, peer);
+            default: break;
+        }
+
         // Only remove non-seedlist peers
         if (GenesisConfig.SEED_PEERS.find(seed => seed.host === peer.host)) return;
         this.addressBook.delete(peer.host);
