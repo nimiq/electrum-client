@@ -1,4 +1,5 @@
 import { transactionFromPlain } from '../electrum-api';
+import { Transport } from '../electrum-api/types';
 import { Agent, Event as AgentEvent } from './Agent';
 import { ConsensusState, TransactionState, } from './types';
 import { BlockStore, TransactionStore } from './Stores';
@@ -278,7 +279,7 @@ export class ElectrumClient {
             await agent.sync();
         }
         catch (error) {
-            this.removePeer(agent.peer);
+            this.removePeer(agent.peer, agent.transport);
             agent.close(error.message);
             return;
         }
@@ -298,7 +299,25 @@ export class ElectrumClient {
             this.addressBook.set(peer.host, peer);
         }
     }
-    removePeer(peer) {
+    removePeer(peer, transport) {
+        switch (transport) {
+            case Transport.WSS:
+                if (peer.ports['ssl']) {
+                    peer.preferTransport = Transport.SSL;
+                    this.addressBook.set(peer.host, peer);
+                    return;
+                }
+            case Transport.SSL:
+                if (peer.ports['tcp']) {
+                    peer.preferTransport = Transport.TCP;
+                    this.addressBook.set(peer.host, peer);
+                    return;
+                }
+            case Transport.TCP:
+                delete peer.preferTransport;
+                this.addressBook.set(peer.host, peer);
+            default: break;
+        }
         if (GenesisConfig.SEED_PEERS.find(seed => seed.host === peer.host))
             return;
         this.addressBook.delete(peer.host);

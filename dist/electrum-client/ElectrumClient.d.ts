@@ -1,4 +1,4 @@
-import { PlainTransaction, PlainBlockHeader, Receipt } from '../electrum-api/types';
+import { PlainTransaction, PlainBlockHeader } from '../electrum-api/types';
 import { Handle, ConsensusChangedListener, HeadChangedListener, TransactionListener, TransactionDetails } from './types';
 declare type ElectrumClientOptions = {
     requiredBlockConfirmations: number;
@@ -26,7 +26,7 @@ export declare class ElectrumClient {
     getBlockAt(height: number): Promise<PlainBlockHeader>;
     getBalance(address: string): Promise<import("../electrum-api").Balance>;
     getTransaction(hash: string, block?: PlainBlockHeader): Promise<PlainTransaction>;
-    getTransactionReceiptsByAddress(address: string): Promise<Receipt[]>;
+    getTransactionReceiptsByAddress(address: string): Promise<import("../electrum-api").Receipt[]>;
     getTransactionsByAddress(address: string, sinceBlockHeight?: number, knownTransactions?: TransactionDetails[], limit?: number): Promise<TransactionDetails[]>;
     sendTransaction(serializedTx: string): Promise<TransactionDetails>;
     getMempoolFees(): Promise<[number, number][]>;

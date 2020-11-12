@@ -1,5 +1,5 @@
 import { Observable } from './Observable';
-import { PlainBlockHeader, Peer, Receipt, PlainTransaction } from '../electrum-api/types';
+import { PlainBlockHeader, Peer, Receipt, PlainTransaction, Transport } from '../electrum-api/types';
 export declare enum Event {
     BLOCK = "block",
     TRANSACTION_ADDED = "transaction-added",
@@ -14,6 +14,7 @@ export declare type ElectrumAgentOptions = {
 };
 export declare class Agent extends Observable {
     peer: Peer;
+    transport: Transport;
     private options;
     private connection;
     private handshaking;
@@ -44,4 +45,5 @@ export declare class Agent extends Observable {
     private onBlock;
     private onReceipts;
     private networkToTokenPrefix;
+    private transportToString;
 }

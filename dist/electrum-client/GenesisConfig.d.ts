@@ -11,8 +11,8 @@ declare type GenesisConfigConfig = {
     GENESIS_HASH?: string;
 };
 export declare class GenesisConfig {
-    static mainnet(): void;
-    static testnet(): void;
+    static main(): void;
+    static test(): void;
     static init(config: GenesisConfigConfig): void;
     static get NETWORK_NAME(): Network;
     static get GENESIS_HEADER(): string;

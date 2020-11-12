@@ -5,10 +5,10 @@ export var Network;
     Network["TEST"] = "testnet";
 })(Network || (Network = {}));
 export class GenesisConfig {
-    static mainnet() {
+    static main() {
         GenesisConfig.init(GenesisConfig.CONFIGS[Network.MAIN]);
     }
-    static testnet() {
+    static test() {
         GenesisConfig.init(GenesisConfig.CONFIGS[Network.TEST]);
     }
     static init(config) {

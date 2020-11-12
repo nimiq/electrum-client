@@ -60,6 +60,11 @@ export declare type PeerFeatures = {
     protocol_min: string;
     pruning: number | null;
 };
+export declare enum Transport {
+    TCP = 1,
+    SSL = 2,
+    WSS = 3
+}
 export declare type Peer = {
     ip: string;
     host: string;
@@ -70,4 +75,5 @@ export declare type Peer = {
         wss: number | null;
     };
     pruningLimit?: number;
+    preferTransport?: Transport;
 };
