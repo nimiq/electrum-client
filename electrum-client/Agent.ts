@@ -137,6 +137,11 @@ export class Agent extends Observable {
         return this.connection!.getBlockHeader(height);
     }
 
+    public async estimateFees(targetBlocks: number[]) {
+        const requests = targetBlocks.map((target) => this.connection!.estimateFee(target));
+        return Promise.all(requests);
+    }
+
     public async getFeeHistogram() {
         if (!this.synced) throw new Error('Agent not synced');
         // TODO: Apply timeout
