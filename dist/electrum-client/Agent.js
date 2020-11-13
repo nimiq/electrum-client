@@ -108,7 +108,7 @@ export class Agent extends Observable {
         return this.connection.getBlockHeader(height);
     }
     async estimateFees(targetBlocks) {
-        const requests = targetBlocks.map((target) => this.connection.estimateFee(target));
+        const requests = targetBlocks.map((target) => this.connection.estimateFee(target).catch(() => -1));
         return Promise.all(requests);
     }
     async getFeeHistogram() {
