@@ -29,6 +29,7 @@ export declare class Agent extends Observable {
     getTransactionReceipts(address: string): Promise<Receipt[]>;
     getTransaction(hash: string, block?: PlainBlockHeader): Promise<PlainTransaction>;
     getBlockHeader(height: number): Promise<PlainBlockHeader>;
+    estimateFees(targetBlocks: number[]): Promise<number[]>;
     getFeeHistogram(): Promise<[number, number][]>;
     getMinimumRelayFee(): Promise<number>;
     broadcastTransaction(rawTx: string): Promise<PlainTransaction>;

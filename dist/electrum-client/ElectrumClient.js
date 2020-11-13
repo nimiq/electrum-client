@@ -187,6 +187,37 @@ export class ElectrumClient {
             confirmations: 0,
         };
     }
+    async estimateFees(targetBlocks = [25, 10, 5, 2]) {
+        const estimates = [];
+        for (const agent of this.agents) {
+            try {
+                estimates.push(await agent.estimateFees(targetBlocks));
+            }
+            catch (error) {
+                console.warn(`Client: failed to get fee estimate from ${agent.peer.host}:`, error.message);
+            }
+        }
+        if (!estimates.length) {
+            throw new Error(`Failed to get fee estimates`);
+        }
+        function median(array) {
+            if (!array.length)
+                return undefined;
+            const middleIndex = Math.floor(array.length / 2);
+            const sorted = [...array].sort();
+            return array.length % 2 !== 0
+                ? sorted[middleIndex]
+                : Math.round((sorted[middleIndex - 1] + sorted[middleIndex]) / 2);
+        }
+        ;
+        const result = {};
+        for (const target of targetBlocks) {
+            const i = targetBlocks.indexOf(target);
+            const feesForTarget = estimates.map(estimate => estimate[i]).filter(estimate => estimate > 0);
+            result[target] = median(feesForTarget);
+        }
+        return result;
+    }
     async getMempoolFees() {
         for (const agent of this.agents) {
             try {

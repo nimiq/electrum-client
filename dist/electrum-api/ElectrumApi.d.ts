@@ -19,6 +19,7 @@ export declare class ElectrumApi {
     proofTransaction(hash: string, block: PlainBlockHeader): Promise<boolean>;
     getTransactionMerkleRoot(hash: string, height: number): Promise<string>;
     getBlockHeader(height: number): Promise<PlainBlockHeader>;
+    estimateFee(targetBlocks: number): Promise<number>;
     getFeeHistogram(): Promise<Array<[number, number]>>;
     getRelayFee(): Promise<number>;
     broadcastTransaction(rawTx: string): Promise<PlainTransaction>;

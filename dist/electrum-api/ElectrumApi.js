@@ -70,6 +70,10 @@ export class ElectrumApi {
         const raw = await this.socket.request('blockchain.block.header', height);
         return blockHeaderToPlain(raw, height);
     }
+    async estimateFee(targetBlocks) {
+        const coinsPerKilobyte = await this.socket.request('blockchain.estimatefee', targetBlocks);
+        return Math.round(coinsPerKilobyte / 1000 * 1e8);
+    }
     async getFeeHistogram() {
         return this.socket.request('mempool.get_fee_histogram');
     }
