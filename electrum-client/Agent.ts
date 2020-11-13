@@ -138,7 +138,7 @@ export class Agent extends Observable {
     }
 
     public async estimateFees(targetBlocks: number[]) {
-        const requests = targetBlocks.map((target) => this.connection!.estimateFee(target));
+        const requests = targetBlocks.map((target) => this.connection!.estimateFee(target).catch(() => -1));
         return Promise.all(requests);
     }
 
