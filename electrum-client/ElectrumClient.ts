@@ -499,10 +499,11 @@ export class ElectrumClient {
     }
 
     async onHeadChanged(block: PlainBlockHeader, reason: string, revertedBlocks: PlainBlockHeader[], adoptedBlocks: PlainBlockHeader[]) {
-        // Process head-changed listeners.
-        if (this.consensusState === ConsensusState.ESTABLISHED && (!this.head || block.blockHash !== this.head.blockHash)) {
-            this.head = block;
+        const previousBlock = this.head;
+        this.head = block; // TODO: Check with consensus
 
+        // Process head-changed listeners.
+        if (this.consensusState === ConsensusState.ESTABLISHED && (!previousBlock || block.blockHash !== previousBlock.blockHash)) {
             for (const listener of this.headChangedListeners.values()) {
                 listener(block, reason, revertedBlocks.map(b => b.blockHash), adoptedBlocks.map(b => b.blockHash));
             }

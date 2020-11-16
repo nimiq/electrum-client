@@ -27,8 +27,14 @@
 
 	const client = new ElectrumClient();
 	window.client = client;
-	client.addConsensusChangedListener(state => consensus = state);
-	client.addHeadChangedListener(block => head = block);
+	client.addConsensusChangedListener(state => {
+		console.log("Consensus:", state);
+		consensus = state;
+	});
+	client.addHeadChangedListener(block => {
+		console.log("Block:", block);
+		head = block;
+	});
 
 	// Create self-updating timeago counter
 	let now = 0;

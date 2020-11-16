@@ -252,17 +252,10 @@ export class Agent extends Observable {
     }
 
     private async onBlock(block: PlainBlockHeader) {
-        if (this.syncing) {
-            this.syncing = false;
-            this.synced = true;
-            this.fire(Event.SYNCED);
-            this.pingInterval = window.setInterval(this.ping.bind(this), CONNECTIVITY_CHECK_INTERVAL);
-        }
-
         // TODO: Move into Consensus
         let prevBlock = BlockStore.get(block.blockHeight - 1);
         if (!prevBlock && block.blockHeight > 0) {
-            prevBlock = await this.getBlockHeader(block.blockHeight - 1);
+            prevBlock = await this.connection!.getBlockHeader(block.blockHeight - 1);
             BlockStore.set(prevBlock.blockHeight, prevBlock);
         }
         if ((!prevBlock && block.blockHeight === 0) || prevBlock!.blockHash === block.prevHash) {
@@ -270,6 +263,13 @@ export class Agent extends Observable {
             this.fire(Event.BLOCK, block);
         } else {
             console.warn('Agent: Received non-consecutive block:', block);
+        }
+
+        if (this.syncing) {
+            this.syncing = false;
+            this.synced = true;
+            this.fire(Event.SYNCED);
+            this.pingInterval = window.setInterval(this.ping.bind(this), CONNECTIVITY_CHECK_INTERVAL);
         }
     }
 
