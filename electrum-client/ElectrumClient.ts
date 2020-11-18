@@ -48,7 +48,7 @@ export class ElectrumClient {
         // Seed addressbook
         this.addPeers(GenesisConfig.SEED_PEERS);
 
-        this.connect();
+        this.connectNewPeer();
     }
 
     public getHeadHash() {
@@ -347,11 +347,14 @@ export class ElectrumClient {
         });
     }
 
-    private async connect() {
+    public async connectNewPeer() {
         this.onConsensusChanged(ConsensusState.CONNECTING);
 
         // Connect to network
-        const peer = [...this.addressBook.values()][Math.floor(Math.random() * this.addressBook.size)];
+        const connectedPeers = [...this.agents].map((agent) => agent.peer);
+        const newPeers = [...this.addressBook.values()].filter((peer) => !connectedPeers.includes(peer));
+        const peer = newPeers[Math.floor(Math.random() * newPeers.length)];
+        if (!peer) return false;
         const agentOptions: ElectrumAgentOptions | undefined = this.options.websocketProxy
             ? {
                 tcpProxyUrl: this.options.websocketProxy.tcp,
@@ -377,11 +380,12 @@ export class ElectrumClient {
             // console.warn(error);
             this.removePeer(agent.peer, agent.transport);
             agent.close(error.message);
-            return;
+            return false;
         }
 
         // Get more peers
         this.addPeers(await agent.getPeers());
+        return true;
     }
 
     private addPeers(peers: Peer[]) {
@@ -495,10 +499,10 @@ export class ElectrumClient {
             this.agents.delete(agent);
         }
         console.debug('Client: Consensus failed: last agent closed');
-        this.connect();
+        this.connectNewPeer();
     }
 
-    async onHeadChanged(block: PlainBlockHeader, reason: string, revertedBlocks: PlainBlockHeader[], adoptedBlocks: PlainBlockHeader[]) {
+    private async onHeadChanged(block: PlainBlockHeader, reason: string, revertedBlocks: PlainBlockHeader[], adoptedBlocks: PlainBlockHeader[]) {
         const previousBlock = this.head;
         this.head = block; // TODO: Check with consensus
 
