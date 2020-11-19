@@ -63,7 +63,7 @@ describe('ElectrumApi', () => {
         for (const vector of VECTORS) {
             const tx = BitcoinJS.Transaction.fromHex(vector.raw);
 
-            const plain = transactionToPlain(tx);
+            const plain = transactionToPlain(tx, vector.network || BitcoinJS.networks.bitcoin);
             const revived = transactionFromPlain(plain);
 
             expect(revived.getId()).toEqual(tx.getId());
@@ -74,7 +74,10 @@ describe('ElectrumApi', () => {
         for (const vector of VECTORS) {
             const tx = BitcoinJS.Transaction.fromHex(vector.raw);
 
-            const addresses = tx.ins.map(input => deriveAddressFromInput(input, vector.network));
+            const addresses = tx.ins.map(input => deriveAddressFromInput(
+                input,
+                vector.network || BitcoinJS.networks.bitcoin,
+            ));
 
             expect(addresses).toEqual(vector.inputAddresses);
         }
