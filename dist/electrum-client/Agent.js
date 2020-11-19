@@ -209,15 +209,9 @@ export class Agent extends Observable {
         this.connection.subscribeHeaders(this.onBlock.bind(this));
     }
     async onBlock(block) {
-        if (this.syncing) {
-            this.syncing = false;
-            this.synced = true;
-            this.fire(Event.SYNCED);
-            this.pingInterval = window.setInterval(this.ping.bind(this), CONNECTIVITY_CHECK_INTERVAL);
-        }
         let prevBlock = BlockStore.get(block.blockHeight - 1);
         if (!prevBlock && block.blockHeight > 0) {
-            prevBlock = await this.getBlockHeader(block.blockHeight - 1);
+            prevBlock = await this.connection.getBlockHeader(block.blockHeight - 1);
             BlockStore.set(prevBlock.blockHeight, prevBlock);
         }
         if ((!prevBlock && block.blockHeight === 0) || prevBlock.blockHash === block.prevHash) {
@@ -226,6 +220,12 @@ export class Agent extends Observable {
         }
         else {
             console.warn('Agent: Received non-consecutive block:', block);
+        }
+        if (this.syncing) {
+            this.syncing = false;
+            this.synced = true;
+            this.fire(Event.SYNCED);
+            this.pingInterval = window.setInterval(this.ping.bind(this), CONNECTIVITY_CHECK_INTERVAL);
         }
     }
     async onReceipts(address, receipts) {

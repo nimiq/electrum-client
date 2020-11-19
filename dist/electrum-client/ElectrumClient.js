@@ -409,8 +409,9 @@ export class ElectrumClient {
         this.connect();
     }
     async onHeadChanged(block, reason, revertedBlocks, adoptedBlocks) {
-        if (this.consensusState === ConsensusState.ESTABLISHED && (!this.head || block.blockHash !== this.head.blockHash)) {
-            this.head = block;
+        const previousBlock = this.head;
+        this.head = block;
+        if (this.consensusState === ConsensusState.ESTABLISHED && (!previousBlock || block.blockHash !== previousBlock.blockHash)) {
             for (const listener of this.headChangedListeners.values()) {
                 listener(block, reason, revertedBlocks.map(b => b.blockHash), adoptedBlocks.map(b => b.blockHash));
             }
