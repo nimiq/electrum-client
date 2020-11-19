@@ -388,6 +388,13 @@ export class ElectrumClient {
         return true;
     }
 
+    public getPeerStatistics() {
+        return {
+            known: this.addressBook.size,
+            connected: this.agents.size,
+        };
+    }
+
     private addPeers(peers: Peer[]) {
         // Filter out unreachable peers
 
