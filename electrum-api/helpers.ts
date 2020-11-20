@@ -43,10 +43,18 @@ export function transactionToPlain(tx: string | BitcoinJS.Transaction, network: 
 }
 
 export function inputToPlain(input: BitcoinJS.TxInput, index: number, network: BitcoinJS.Network): PlainInput {
+    let address: string | null = null;
+
+    try {
+        address = deriveAddressFromInput(input, network) || null;
+    } catch (error) {
+        if (location.hostname === 'localhost') console.error(error);
+    }
+
     return {
         script: bytesToHex(input.script),
         transactionHash: bytesToHex(new Uint8Array(input.hash).reverse()),
-        address: deriveAddressFromInput(input, network) || null,
+        address,
         witness: input.witness.map((buf) => {
             if (typeof buf === 'number') return buf;
             return bytesToHex(buf);
