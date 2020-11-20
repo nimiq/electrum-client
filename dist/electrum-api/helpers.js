@@ -104,7 +104,7 @@ export function deriveAddressFromInput(input, network) {
         }
         if (redeemScript[redeemScript.length - 1] === BitcoinJS.script.OPS.OP_CHECKMULTISIG) {
             const m = chunks.length - 2;
-            const pubkeys = redeemScript.filter((n) => typeof n !== 'number');
+            const pubkeys = redeemScript.filter(n => typeof n !== 'number');
             return BitcoinJS.payments.p2sh({
                 redeem: BitcoinJS.payments.p2ms({
                     m,
@@ -123,18 +123,35 @@ export function deriveAddressFromInput(input, network) {
         }
     }
     if (chunks.length === 1 && witness.length > 2) {
-        const m = witness.length - 2;
-        const pubkeys = BitcoinJS.script.decompile(witness[witness.length - 1])
-            .filter((n) => typeof n !== 'number');
-        return BitcoinJS.payments.p2sh({
-            redeem: BitcoinJS.payments.p2wsh({
-                redeem: BitcoinJS.payments.p2ms({
-                    m,
-                    pubkeys,
-                    network,
+        const redeemScript = BitcoinJS.script.decompile(witness[witness.length - 1]);
+        if (!redeemScript) {
+            console.error(new Error('Cannot decode address from input'));
+            return undefined;
+        }
+        if (redeemScript[redeemScript.length - 1] === BitcoinJS.script.OPS.OP_CHECKMULTISIG) {
+            const m = witness.length - 2;
+            const pubkeys = BitcoinJS.script.decompile(witness[witness.length - 1])
+                .filter(n => typeof n !== 'number');
+            return BitcoinJS.payments.p2sh({
+                redeem: BitcoinJS.payments.p2wsh({
+                    redeem: BitcoinJS.payments.p2ms({
+                        m,
+                        pubkeys,
+                        network,
+                    }),
                 }),
-            }),
-        }).address;
+            }).address;
+        }
+        if (witness.length === 3 && redeemScript.filter(n => typeof n !== 'number').length === 1) {
+            return BitcoinJS.payments.p2sh({
+                redeem: BitcoinJS.payments.p2wsh({
+                    redeem: BitcoinJS.payments.p2pkh({
+                        pubkey: witness[1],
+                        network,
+                    }),
+                }),
+            }).address;
+        }
     }
     if (chunks.length === 0 && witness.length > 2) {
         const redeemScript = BitcoinJS.script.decompile(witness[witness.length - 1]);
@@ -144,7 +161,7 @@ export function deriveAddressFromInput(input, network) {
         }
         if (redeemScript[redeemScript.length - 1] === BitcoinJS.script.OPS.OP_CHECKMULTISIG) {
             const m = witness.length - 2;
-            const pubkeys = redeemScript.filter((n) => typeof n !== 'number');
+            const pubkeys = redeemScript.filter(n => typeof n !== 'number');
             return BitcoinJS.payments.p2wsh({
                 redeem: BitcoinJS.payments.p2ms({
                     m,
