@@ -35,10 +35,18 @@ export function transactionToPlain(tx, network) {
     return plain;
 }
 export function inputToPlain(input, index, network) {
+    let address = null;
+    try {
+        address = deriveAddressFromInput(input, network) || null;
+    }
+    catch (error) {
+        if (location.hostname === 'localhost')
+            console.error(error);
+    }
     return {
         script: bytesToHex(input.script),
         transactionHash: bytesToHex(new Uint8Array(input.hash).reverse()),
-        address: deriveAddressFromInput(input, network) || null,
+        address,
         witness: input.witness.map((buf) => {
             if (typeof buf === 'number')
                 return buf;
