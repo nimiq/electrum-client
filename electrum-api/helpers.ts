@@ -129,7 +129,7 @@ export function deriveAddressFromInput(input: BitcoinJS.TxInput, network: Bitcoi
         // 80975cddebaa93aa21a6477c0d050685d6820fa1068a2731db0f39b535cbd369 0,1,2
         if (redeemScript[redeemScript.length - 1] === BitcoinJS.script.OPS.OP_CHECKMULTISIG) {
             const m = chunks.length - 2; // Number of signatures
-            const pubkeys = redeemScript.filter((n: number | Buffer) => typeof n !== 'number') as Buffer[];
+            const pubkeys = redeemScript.filter(n => typeof n !== 'number') as Buffer[];
 
             return BitcoinJS.payments.p2sh({
                 redeem: BitcoinJS.payments.p2ms({
@@ -151,22 +151,44 @@ export function deriveAddressFromInput(input: BitcoinJS.TxInput, network: Bitcoi
         }
     }
 
-    // Nested SegWit MultiSig P2SH(P2WSH(P2MS)) (3...)
-    // 80975cddebaa93aa21a6477c0d050685d6820fa1068a2731db0f39b535cbd369 3
+    // Nested SegWit Scripts (3...)
     if (chunks.length === 1 && witness.length > 2) {
-        const m = witness.length - 2; // Number of signatures
-        const pubkeys = BitcoinJS.script.decompile(witness[witness.length - 1])!
-            .filter((n: number | Uint8Array) => typeof n !== 'number') as Buffer[];
+        const redeemScript = BitcoinJS.script.decompile(witness[witness.length - 1]);
+        if (!redeemScript) {
+            console.error(new Error('Cannot decode address from input'));
+            return undefined;
+        }
 
-        return BitcoinJS.payments.p2sh({
-            redeem: BitcoinJS.payments.p2wsh({
-                redeem: BitcoinJS.payments.p2ms({
-                    m,
-                    pubkeys,
-                    network,
+        // Nested SegWit MultiSig P2SH(P2WSH(P2MS)) (3...)
+        // 80975cddebaa93aa21a6477c0d050685d6820fa1068a2731db0f39b535cbd369 3
+        if (redeemScript[redeemScript.length - 1] === BitcoinJS.script.OPS.OP_CHECKMULTISIG) {
+            const m = witness.length - 2; // Number of signatures
+            const pubkeys = BitcoinJS.script.decompile(witness[witness.length - 1])!
+                .filter(n => typeof n !== 'number') as Buffer[];
+
+            return BitcoinJS.payments.p2sh({
+                redeem: BitcoinJS.payments.p2wsh({
+                    redeem: BitcoinJS.payments.p2ms({
+                        m,
+                        pubkeys,
+                        network,
+                    }),
                 }),
-            }),
-        }).address;
+            }).address;
+        }
+
+        // Nested SegWit "something" P2SH(P2WSH(P2PKH))
+        // 9dc53a675b2ad8eea203913b2d8041bb3e961975fde40dae870fa1aac29f8d73 0,1,2,3,4,5
+        if (witness.length === 3 && redeemScript.filter(n => typeof n !== 'number').length === 1) {
+            return BitcoinJS.payments.p2sh({
+                redeem: BitcoinJS.payments.p2wsh({
+                    redeem: BitcoinJS.payments.p2pkh({
+                        pubkey: witness[1],
+                        network,
+                    }),
+                }),
+            }).address;
+        }
     }
 
     // Native SegWit Scripts (bc1...)
@@ -181,7 +203,7 @@ export function deriveAddressFromInput(input: BitcoinJS.TxInput, network: Bitcoi
         // 54a3e33efff4c508fa5c8ce7ccf4b08538a8fd2bf808b97ae51c21cf83df2dd1 0
         if (redeemScript[redeemScript.length - 1] === BitcoinJS.script.OPS.OP_CHECKMULTISIG) {
             const m = witness.length - 2; // Number of signatures
-            const pubkeys = redeemScript.filter((n: number | Uint8Array) => typeof n !== 'number') as Buffer[];
+            const pubkeys = redeemScript.filter(n => typeof n !== 'number') as Buffer[];
 
             return BitcoinJS.payments.p2wsh({
                 redeem: BitcoinJS.payments.p2ms({
