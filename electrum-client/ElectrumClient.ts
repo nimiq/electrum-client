@@ -22,6 +22,9 @@ type ElectrumClientOptions = {
     },
 }
 
+type AgentCall<R> = (agent: Agent) => R | Promise<R>;
+type AgentErrorCallback = (agent: Agent, error: Error) => void;
+
 export class ElectrumClient {
     private consensusState = ConsensusState.CONNECTING;
     private head: PlainBlockHeader | null = null;
@@ -48,7 +51,7 @@ export class ElectrumClient {
         // Seed addressbook
         this.addPeers(GenesisConfig.SEED_PEERS);
 
-        this.connect();
+        this.connectNewAgent();
     }
 
     public getHeadHash() {
@@ -67,25 +70,27 @@ export class ElectrumClient {
         const storedBlock = BlockStore.get(height);
         if (storedBlock) return storedBlock;
 
-        for (const agent of this.agents) {
-            try {
-                return await agent.getBlockHeader(height);
-            } catch (error) {
-                console.warn(`Client: failed to get block header at ${height} from ${agent.peer.host}:`, error.message);
-            }
+        try {
+            return await this.callAgents(
+                (agent: Agent) => agent.getBlockHeader(height),
+                (agent: Agent, error: Error) =>
+                    console.warn(`Client: failed to get block header at ${height} from ${agent.peer.host}:`, error.message),
+            );
+        } catch (e) {
+            throw new Error(`Failed to get block header at ${height}`);
         }
-        throw new Error(`Failed to get block header at ${height}`);
     }
 
     public async getBalance(address: string) {
-        for (const agent of this.agents) {
-            try {
-                return await agent.getBalance(address);
-            } catch (error) {
-                console.warn(`Client: failed to get balance for ${address} from ${agent.peer.host}:`, error.message);
-            }
+        try {
+            return await this.callAgents(
+                (agent: Agent) => agent.getBalance(address),
+                (agent: Agent, error: Error) =>
+                    console.warn(`Client: failed to get balance for ${address} from ${agent.peer.host}:`, error.message),
+            );
+        } catch (e) {
+            throw new Error(`Failed to get balance for ${address}`);
         }
-        throw new Error(`Failed to get balance for ${address}`);
     }
 
     public async getTransaction(hash: string, block?: PlainBlockHeader) {
@@ -94,25 +99,27 @@ export class ElectrumClient {
             if (storedTransaction) return storedTransaction;
         }
 
-        for (const agent of this.agents) {
-            try {
-                return await agent.getTransaction(hash, block);
-            } catch (error) {
-                console.warn(`Client: failed to get transaction ${hash} from ${agent.peer.host}:`, error.message);
-            }
+        try {
+            return await this.callAgents(
+                (agent: Agent) => agent.getTransaction(hash, block),
+                (agent: Agent, error: Error) =>
+                    console.warn(`Client: failed to get transaction ${hash} from ${agent.peer.host}:`, error.message),
+            );
+        } catch (e) {
+            throw new Error(`Failed to get transaction ${hash}`);
         }
-        throw new Error(`Failed to get transaction ${hash}`);
     }
 
     public async getTransactionReceiptsByAddress(address: string) {
-        for (const agent of this.agents) {
-            try {
-                return await agent.getTransactionReceipts(address);
-            } catch (error) {
-                console.warn(`Client: failed to get transaction receipts for ${address} from ${agent.peer.host}:`, error.message);
-            }
+        try {
+            return await this.callAgents(
+                (agent: Agent) => agent.getTransactionReceipts(address),
+                (agent: Agent, error: Error) =>
+                    console.warn(`Client: failed to get transaction receipts for ${address} from ${agent.peer.host}:`, error.message),
+            );
+        } catch (e) {
+            throw new Error(`Failed to get transaction receipts for ${address}`);
         }
-        throw new Error(`Failed to get transaction receipts for ${address}`);
     }
 
     public async getTransactionsByAddress(address: string, sinceBlockHeight = 0, knownTransactions: TransactionDetails[] = [], limit = Infinity) {
@@ -205,18 +212,18 @@ export class ElectrumClient {
 
     public async sendTransaction(serializedTx: string): Promise<TransactionDetails> {
         // Relay transaction to all connected peers.
-        let tx: PlainTransaction | undefined;
+        let tx: PlainTransaction;
         let sendError: Error | undefined;
-        for (const agent of this.agents) {
-            try {
-                tx = await agent.broadcastTransaction(serializedTx);
-            } catch (error) {
-                sendError = error;
-                console.warn(`Client: failed to broadcast transaction to ${agent.peer.host}:`, error.message);
-            }
-        }
-
-        if (!tx) {
+        try {
+            [tx] = await this.callAgents(
+                (agent: Agent) => agent.broadcastTransaction(serializedTx),
+                (agent: Agent, error: Error) => {
+                    sendError = error;
+                    console.warn(`Client: failed to broadcast transaction to ${agent.peer.host}:`, error.message);
+                },
+                false,
+            );
+        } catch (e) {
             throw (sendError || new Error('Could not send transaction'));
         }
 
@@ -240,16 +247,15 @@ export class ElectrumClient {
     }
 
     public async estimateFees(targetBlocks = [25, 10, 5, 2]) { // Default FEE_ETA_TARGETS of Electrum wallet
-        const estimates: number[][] = [];
-        for (const agent of this.agents) {
-            try {
-                estimates.push(await agent.estimateFees(targetBlocks));
-            } catch (error) {
-                console.warn(`Client: failed to get fee estimate from ${agent.peer.host}:`, error.message);
-            }
-        }
-
-        if (!estimates.length) {
+        let estimates: number[][];
+        try {
+            estimates = await this.callAgents(
+                (agent: Agent) => agent.estimateFees(targetBlocks),
+                (agent: Agent, error: Error) =>
+                    console.warn(`Client: failed to get fee estimate from ${agent.peer.host}:`, error.message),
+                false,
+            );
+        } catch (e) {
             throw new Error(`Failed to get fee estimates`);
         }
 
@@ -260,7 +266,7 @@ export class ElectrumClient {
             return array.length % 2 !== 0
                 ? sorted[middleIndex]
                 : Math.round((sorted[middleIndex - 1] + sorted[middleIndex]) / 2);
-        };
+        }
 
         const result: {[target: number]: number | undefined} = {};
 
@@ -274,25 +280,27 @@ export class ElectrumClient {
     }
 
     public async getMempoolFees() {
-        for (const agent of this.agents) {
-            try {
-                return await agent.getFeeHistogram();
-            } catch (error) {
-                console.warn(`Client: failed to get mempool fees from ${agent.peer.host}:`, error.message);
-            }
+        try {
+            return await this.callAgents(
+                (agent: Agent) => agent.getFeeHistogram(),
+                (agent: Agent, error: Error) =>
+                    console.warn(`Client: failed to get mempool fees from ${agent.peer.host}:`, error.message),
+            );
+        } catch (e) {
+            throw new Error(`Failed to get mempool fees`);
         }
-        throw new Error(`Failed to get mempool fees`);
     }
 
     public async getMinimumRelayFee() {
-        for (const agent of this.agents) {
-            try {
-                return await agent.getMinimumRelayFee();
-            } catch (error) {
-                console.warn(`Client: failed to get relay fee from ${agent.peer.host}:`, error.message);
-            }
+        try {
+            return await this.callAgents(
+                (agent: Agent) => agent.getMinimumRelayFee(),
+                (agent: Agent, error: Error) =>
+                    console.warn(`Client: failed to get relay fee from ${agent.peer.host}:`, error.message),
+            );
+        } catch (e) {
+            throw new Error(`Failed to get relay fee`);
         }
-        throw new Error(`Failed to get relay fee`);
     }
 
     public addConsensusChangedListener(listener: ConsensusChangedListener): Handle {
@@ -347,11 +355,21 @@ export class ElectrumClient {
         });
     }
 
-    private async connect() {
+    public getPeerStatistics() {
+        return {
+            known: this.addressBook.size,
+            connected: this.agents.size,
+        };
+    }
+
+    private async connectNewAgent() {
         this.onConsensusChanged(ConsensusState.CONNECTING);
 
         // Connect to network
-        const peer = [...this.addressBook.values()][Math.floor(Math.random() * this.addressBook.size)];
+        const connectedPeers = [...this.agents].map((agent) => agent.peer);
+        const newPeers = [...this.addressBook.values()].filter((peer) => !connectedPeers.includes(peer));
+        const peer = newPeers[Math.floor(Math.random() * newPeers.length)];
+        if (!peer) return null;
         const agentOptions: ElectrumAgentOptions | undefined = this.options.websocketProxy
             ? {
                 tcpProxyUrl: this.options.websocketProxy.tcp,
@@ -377,11 +395,12 @@ export class ElectrumClient {
             // console.warn(error);
             this.removePeer(agent.peer, agent.transport);
             agent.close(error.message);
-            return;
+            return null;
         }
 
         // Get more peers
         this.addPeers(await agent.getPeers());
+        return agent;
     }
 
     private addPeers(peers: Peer[]) {
@@ -495,10 +514,10 @@ export class ElectrumClient {
             this.agents.delete(agent);
         }
         console.debug('Client: Consensus failed: last agent closed');
-        this.connect();
+        this.connectNewAgent();
     }
 
-    async onHeadChanged(block: PlainBlockHeader, reason: string, revertedBlocks: PlainBlockHeader[], adoptedBlocks: PlainBlockHeader[]) {
+    private async onHeadChanged(block: PlainBlockHeader, reason: string, revertedBlocks: PlainBlockHeader[], adoptedBlocks: PlainBlockHeader[]) {
         const previousBlock = this.head;
         this.head = block; // TODO: Check with consensus
 
@@ -604,5 +623,42 @@ export class ElectrumClient {
         return [...this.transactionListeners.values()].filter(({ addresses }) =>
             tx.inputs.some(input => input.address && addresses.has(input.address))
             || tx.outputs.some(output => output.address && addresses.has(output.address)));
+    }
+
+    private async callAgents<R>(call: AgentCall<R>, onAgentError?: AgentErrorCallback, stopAfterFirstResult?: true): Promise<R>;
+    private async callAgents<R>(call: AgentCall<R>, onAgentError: AgentErrorCallback | undefined, stopAfterFirstResult: false): Promise<R[]>;
+    private async callAgents<R>(call: AgentCall<R>, onAgentError?: AgentErrorCallback, stopAfterFirstResult: boolean = true): Promise<R | R[]> {
+        const untriedConnectedAgents: Set<Agent> = new Set(this.agents);
+        const results: R[] = [];
+        for (const agent of this.agents) {
+            try {
+                untriedConnectedAgents.delete(agent);
+                results.push(await call(agent));
+                if (stopAfterFirstResult) break;
+            } catch (error) {
+                if (onAgentError) {
+                    onAgentError(agent, error);
+                }
+
+                const { known: knownPeers, connected: connectedPeers } = this.getPeerStatistics();
+                if (untriedConnectedAgents.size || results.length || connectedPeers >= knownPeers) continue;
+
+                // All connected peers failed. Connect to a new one.
+                let newAgent: Agent | null = null;
+                let newAgentAttempts = 0;
+                while (!newAgent && newAgentAttempts < 3) {
+                    newAgentAttempts++;
+                    newAgent = await this.connectNewAgent();
+                }
+
+                if (!newAgent) break;
+
+                await this.waitForConsensusEstablished();
+            }
+        }
+
+        if (!results.length) throw new Error('All agents failed.');
+        if (stopAfterFirstResult) return results[0];
+        return results;
     }
 }
