@@ -380,6 +380,9 @@ export class ElectrumClient {
             return;
         }
 
+        // Activate all subscriptions on the new agent
+        agent.subscribe([...this.subscribedAddresses.values()]);
+
         // Get more peers
         this.addPeers(await agent.getPeers());
     }
@@ -464,13 +467,6 @@ export class ElectrumClient {
         }
 
         if (state === ConsensusState.ESTABLISHED) {
-            // Subscribe addresses
-            if (this.subscribedAddresses.size > 0) {
-                for (const agent of this.agents) {
-                    agent.subscribe([...this.subscribedAddresses.values()]);
-                }
-            }
-
             // Update head block hash
             // const head = await consensus.getHead();
             // if (head.blockHash === this.head.blockHash) return;
