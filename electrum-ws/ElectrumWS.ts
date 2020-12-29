@@ -67,7 +67,7 @@ export class ElectrumWS {
         this.connect();
     }
 
-    public async request(method: string, ...params: (string | number)[]): Promise<any> {
+    public async request(method: string, ...params: (string | number | (string | number)[])[]): Promise<any> {
         let id: number;
         do {
             id = Math.ceil(Math.random() * 1e5);

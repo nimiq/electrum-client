@@ -179,7 +179,7 @@ export class ElectrumApi {
         });
     }
 
-    public async setProtocolVersion(clientName: string, protocolVersion: string): Promise<string[]> {
+    public async setProtocolVersion(clientName: string, protocolVersion: string | string[]): Promise<string[]> {
         return this.socket.request('server.version', clientName, protocolVersion);
     }
 
