@@ -82,7 +82,7 @@ describe('ElectrumApi', () => {
         }
     });
 
-    fit('can decode input addresses', () => {
+    it('can decode input addresses', () => {
         for (const vector of VECTORS) {
             const tx = BitcoinJS.Transaction.fromHex(vector.raw);
 

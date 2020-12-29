@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "scripts": {
     "build": "rollup -c",
-    "build:bitcoinjs": "browserify -p tinyify ../bitcoinjs.js -s BitcoinJS > public/bitcoinjs.min.js",
+    "build:bitcoinjs": "browserify -p tinyify ../bitcoinjs-parts.js -s BitcoinJS > public/bitcoinjs.min.js",
     "dev": "rollup -c -w",
     "start": "sirv public"
   },
