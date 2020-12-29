@@ -211,7 +211,7 @@ export class Agent extends Observable {
             const timeout = setTimeout(() => reject(new Error('Handshake timeout')), HANDSHAKE_TIMEOUT);
 
             try {
-                await this.connection!.setProtocolVersion(`${CLIENT_NAME} ${CLIENT_VERSION}`, [PROTOCOL_VERSION_MIN, PROTOCOL_VERSION_MAX]);
+                await this.connection!.setProtocolVersion(`electrum/4.0.9`, PROTOCOL_VERSION_MIN);
             } catch (error) {
                 reject(new Error('Incompatible protocol version'));
                 return;
