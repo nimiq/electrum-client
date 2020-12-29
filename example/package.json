@@ -2,9 +2,9 @@
   "name": "svelte-app",
   "version": "1.0.0",
   "scripts": {
-    "build": "yon build:bitcoinjs && yon rollup -c",
+    "build": "rollup -c",
     "build:bitcoinjs": "browserify -p tinyify ../bitcoinjs.js -s BitcoinJS > public/bitcoinjs.min.js",
-    "dev": "yon build:bitcoinjs && yon rollup -c -w",
+    "dev": "rollup -c -w",
     "start": "sirv public"
   },
   "devDependencies": {
