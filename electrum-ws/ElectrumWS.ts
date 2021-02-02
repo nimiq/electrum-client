@@ -151,7 +151,7 @@ export class ElectrumWS {
 
     private connect() {
         let url = this.endpoint;
-        if (this.options.token) {
+        if (this.options.proxy && this.options.token) {
             url = `${url}?token=${this.options.token}`;
         }
 
