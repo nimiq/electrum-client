@@ -78,7 +78,7 @@ export class ElectrumApi {
     }
 
     public async getTransaction(hash: string, block?: PlainBlockHeader): Promise<PlainTransaction> {
-        if (block) this.proofTransaction(hash, block); // Throws on failed proof
+        if (block) await this.proofTransaction(hash, block); // Throws on failed proof
         const raw: string = await this.socket.request('blockchain.transaction.get', hash);
         return transactionToPlain(raw, this.options.network);
     }
