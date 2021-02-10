@@ -20,6 +20,7 @@ type ElectrumClientOptions = {
         tcp: string | false,
         ssl: string | false,
     },
+    extraSeedPeers: Peer[],
 }
 
 export class ElectrumClient {
@@ -42,11 +43,13 @@ export class ElectrumClient {
     constructor(options: Partial<ElectrumClientOptions> = {}) {
         this.options = {
             requiredBlockConfirmations: 6,
+            extraSeedPeers: [],
             ...options,
         };
 
         // Seed addressbook
         this.addPeers(GenesisConfig.SEED_PEERS);
+        this.addPeers(this.options.extraSeedPeers);
 
         this.connect();
     }
