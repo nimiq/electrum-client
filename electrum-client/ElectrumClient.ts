@@ -353,8 +353,19 @@ export class ElectrumClient {
     private async connect(): Promise<void> {
         this.onConsensusChanged(ConsensusState.CONNECTING);
 
-        // Connect to network
-        const peer = [...this.addressBook.values()][Math.floor(Math.random() * this.addressBook.size)];
+        // Select peer from address book
+        let peers: Peer[] = [];
+        for (const transport of [Transport.WSS, Transport.SSL, Transport.TCP]) {
+            peers = [...this.addressBook.values()].filter((peer) => {
+                const protocol = [null, 'tcp', 'ssl', 'wss'][transport] as 'tcp' | 'ssl' | 'wss';
+                if (!peer.ports[protocol]) return false;
+                if (peer.preferTransport && peer.preferTransport < transport) return false;
+                return true;
+            });
+            if (peers.length > 0) break;
+        }
+
+        const peer = peers[Math.floor(Math.random() * peers.length)];
         const agentOptions: ElectrumAgentOptions | undefined = this.options.websocketProxy
             ? {
                 tcpProxyUrl: this.options.websocketProxy.tcp,
@@ -362,6 +373,7 @@ export class ElectrumClient {
             }
             : undefined;
 
+        // Connect to network
         const agent = new Agent(peer, agentOptions);
 
         agent.on(AgentEvent.SYNCING, () => this.onConsensusChanged(ConsensusState.SYNCING));
