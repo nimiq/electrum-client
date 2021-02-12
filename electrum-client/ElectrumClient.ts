@@ -368,6 +368,9 @@ export class ElectrumClient {
             if (peers.length > 0) break;
         }
 
+        const highPriorityPeers = peers.filter(peer => peer.highPriority);
+        if (highPriorityPeers.length > 0) peers = highPriorityPeers;
+
         const peer = peers[Math.floor(Math.random() * peers.length)];
         const agentOptions: ElectrumAgentOptions | undefined = this.options.websocketProxy
             ? {
@@ -425,6 +428,12 @@ export class ElectrumClient {
     }
 
     private removePeer(peer: Peer, transport: Transport): void {
+        if (peer.highPriority) {
+            peer.highPriority = false;
+            this.addressBook.set(peer.host, peer);
+            return;
+        }
+
         switch (transport) {
             case Transport.WSS:
                 if (peer.ports['ssl']) {
