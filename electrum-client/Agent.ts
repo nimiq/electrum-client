@@ -94,6 +94,8 @@ export class Agent extends Observable {
     public async sync() {
         if (this.handshaking || this.syncing || this.synced) return;
 
+        await this.connection!.waitForConnectionEstablished();
+
         this.handshaking = true;
         await this.handshake();
         this.handshaking = false;
