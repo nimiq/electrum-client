@@ -48,8 +48,7 @@ export class ElectrumClient {
         };
 
         // Seed addressbook
-        this.addPeers(GenesisConfig.SEED_PEERS);
-        this.addPeers(this.options.extraSeedPeers);
+        this.resetPeers();
 
         this.connect();
     }
@@ -356,6 +355,8 @@ export class ElectrumClient {
     private async connect(): Promise<void> {
         this.onConsensusChanged(ConsensusState.CONNECTING);
 
+        if (!this.addressBook.size) this.resetPeers();
+
         // Select peer from address book
         let peers: Peer[] = [];
         for (const transport of [Transport.WSS, Transport.SSL, Transport.TCP]) {
@@ -368,38 +369,50 @@ export class ElectrumClient {
             if (peers.length > 0) break;
         }
 
-        const peer = peers[Math.floor(Math.random() * peers.length)];
-        const agentOptions: ElectrumAgentOptions | undefined = this.options.websocketProxy
-            ? {
-                tcpProxyUrl: this.options.websocketProxy.tcp,
-                sslProxyUrl: this.options.websocketProxy.ssl,
+        // const peer = peers[Math.floor(Math.random() * peers.length)];
+        await Promise.all(peers.map(async (peer) => {
+            const agentOptions: ElectrumAgentOptions | undefined = this.options.websocketProxy
+                ? {
+                    tcpProxyUrl: this.options.websocketProxy.tcp,
+                    sslProxyUrl: this.options.websocketProxy.ssl,
+                }
+                : undefined;
+
+            // Connect to network
+            const agent = new Agent(peer, agentOptions);
+
+            agent.on(AgentEvent.SYNCING, () => this.onConsensusChanged(ConsensusState.SYNCING));
+            agent.on(AgentEvent.SYNCED, () => {
+                this.agents.add(agent);
+                this.onConsensusChanged(ConsensusState.ESTABLISHED);
+            });
+            agent.on(AgentEvent.BLOCK, (block: PlainBlockHeader) => this.onHeadChanged(block, 'extended', [], [block]));
+            agent.on(AgentEvent.TRANSACTION_ADDED, (tx: PlainTransaction) => this.onPendingTransaction(tx));
+            agent.on(AgentEvent.TRANSACTION_MINED, (tx: PlainTransaction, block: PlainBlockHeader) => this.onMinedTransaction(block, tx, block));
+            agent.on(AgentEvent.CLOSE, (reason: string) => this.onConsensusFailed(agent, reason));
+
+            try {
+                await agent.sync();
+            } catch (error) {
+                // console.warn(error);
+                this.removePeer(agent.peer, agent.transport);
+                agent.close(error.message);
+                return;
             }
-            : undefined;
 
-        // Connect to network
-        const agent = new Agent(peer, agentOptions);
-
-        agent.on(AgentEvent.SYNCING, () => this.onConsensusChanged(ConsensusState.SYNCING));
-        agent.on(AgentEvent.SYNCED, () => {
-            this.agents.add(agent);
-            this.onConsensusChanged(ConsensusState.ESTABLISHED);
+            // Get more peers
+            this.addPeers(await agent.getPeers());
+        })).then(() => {
+            if (!this.agents.size) {
+                this.connect();
+            }
         });
-        agent.on(AgentEvent.BLOCK, (block: PlainBlockHeader) => this.onHeadChanged(block, 'extended', [], [block]));
-        agent.on(AgentEvent.TRANSACTION_ADDED, (tx: PlainTransaction) => this.onPendingTransaction(tx));
-        agent.on(AgentEvent.TRANSACTION_MINED, (tx: PlainTransaction, block: PlainBlockHeader) => this.onMinedTransaction(block, tx, block));
-        agent.on(AgentEvent.CLOSE, (reason: string) => this.onConsensusFailed(agent, reason));
+    }
 
-        try {
-            await agent.sync();
-        } catch (error) {
-            // console.warn(error);
-            this.removePeer(agent.peer, agent.transport);
-            agent.close(error.message);
-            return;
-        }
-
-        // Get more peers
-        this.addPeers(await agent.getPeers());
+    private resetPeers(): void {
+        if (this.addressBook.size) this.addressBook.clear();
+        this.addPeers(GenesisConfig.SEED_PEERS);
+        this.addPeers(this.options.extraSeedPeers);
     }
 
     private addPeers(peers: Peer[]): void {
@@ -430,23 +443,21 @@ export class ElectrumClient {
                 if (peer.ports['ssl']) {
                     peer.preferTransport = Transport.SSL;
                     this.addressBook.set(peer.host, peer);
-                    return;
-                } // Fallthrough on purpose
+                } else if (peer.ports['tcp']) {
+                    peer.preferTransport = Transport.TCP;
+                    this.addressBook.set(peer.host, peer);
+                }
             case Transport.SSL:
                 if (peer.ports['tcp']) {
                     peer.preferTransport = Transport.TCP;
                     this.addressBook.set(peer.host, peer);
-                    return;
-                } // Fallthrough on purpose
+                } else {
+                    this.addressBook.delete(peer.host);
+                }
             case Transport.TCP:
-                delete peer.preferTransport;
-                this.addressBook.set(peer.host, peer);
+                this.addressBook.delete(peer.host);
             default: break;
         }
-
-        // Only remove non-seedlist peers
-        if (GenesisConfig.SEED_PEERS.find(seed => seed.host === peer.host)) return;
-        this.addressBook.delete(peer.host);
     }
 
     private getConfirmationHeight(blockHeight: number): number {
@@ -513,7 +524,7 @@ export class ElectrumClient {
             this.agents.delete(agent);
         }
         console.debug('Client: Consensus failed: last agent closed');
-        this.connect();
+        // this.connect();
     }
 
     private onHeadChanged(block: PlainBlockHeader, reason: string, revertedBlocks: PlainBlockHeader[], adoptedBlocks: PlainBlockHeader[]): void {

@@ -80,11 +80,10 @@ export class ElectrumWS extends Observable {
 
         Object.values(ElectrumWSEvent).forEach((ev: string) => {
             this.on(ev, (e: any) => e
-                ? console.debug(`ElectrumWS - ${ev.toUpperCase()}:`, e)
-                : console.debug(`ElectrumWS - ${ev.toUpperCase()}`),
+                ? console.debug(`ElectrumWS - ${ev.toUpperCase()} - ${options.token}:`, e)
+                : console.debug(`ElectrumWS - ${ev.toUpperCase()} - ${options.token}`),
             );
         });
-
     }
 
     public async request(method: string, ...params: (string | number | (string | number)[])[]): Promise<any> {
