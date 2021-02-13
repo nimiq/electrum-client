@@ -447,26 +447,17 @@ export class ElectrumClient {
                     peer.preferTransport = Transport.SSL;
                     this.addressBook.set(peer.host, peer);
                     return
-                }
-                if (peer.ports['tcp']) {
-                    peer.preferTransport = Transport.TCP;
-                    this.addressBook.set(peer.host, peer);
-                    return;
-                }
+                } // Fallthrough on purpose
             case Transport.SSL:
                 if (peer.ports['tcp']) {
                     peer.preferTransport = Transport.TCP;
                     this.addressBook.set(peer.host, peer);
                     return;
-                }
-            // case Transport.TCP:
-            //     delete peer.preferTransport;
-            //     this.addressBook.delete(peer.host);
-            //     return;
-            default:
+                } // Fallthrough on purpose
+            case Transport.TCP:
                 delete peer.preferTransport;
                 this.addressBook.delete(peer.host);
-                break;
+                return;
         }
     }
 

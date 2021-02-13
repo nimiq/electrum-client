@@ -1,4 +1,4 @@
-import { Observable } from '../electrum-client/Observable';
+import { Observable } from './Observable';
 import { stringToBytes, bytesToString } from './helpers';
 
 type RpcResponse = {
@@ -44,7 +44,7 @@ export const DEFAULT_ENDPOINT = 'wss://api.nimiqwatch.com:50002';
 export const DEFAULT_TOKEN = 'mainnet:electrum.blockstream.info';
 
 const RECONNECT_TIMEOUT = 1000;
-const CONNECTED_TIMEOUT = 1000;
+const CONNECTED_TIMEOUT = 500;
 const REQUEST_TIMEOUT = 1000 * 10; // 10 seconds
 const CLOSE_CODE = 1000; // 1000 indicates a normal closure, meaning that the purpose for which the connection was established has been fulfilled
 
