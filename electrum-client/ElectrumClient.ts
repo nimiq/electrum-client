@@ -48,8 +48,7 @@ export class ElectrumClient {
         };
 
         // Seed addressbook
-        this.addPeers(GenesisConfig.SEED_PEERS);
-        this.addPeers(this.options.extraSeedPeers);
+        this.resetPeers();
 
         this.connect();
     }
@@ -356,6 +355,8 @@ export class ElectrumClient {
     private async connect(): Promise<void> {
         this.onConsensusChanged(ConsensusState.CONNECTING);
 
+        if (this.addressBook.size === 0) this.resetPeers();
+
         // Select peer from address book
         let peers: Peer[] = [];
         for (const transport of [Transport.WSS, Transport.SSL, Transport.TCP]) {
@@ -405,6 +406,12 @@ export class ElectrumClient {
         this.addPeers(await agent.getPeers());
     }
 
+    private resetPeers(): void {
+        if (this.addressBook.size > 0) this.addressBook.clear();
+        this.addPeers(GenesisConfig.SEED_PEERS);
+        this.addPeers(this.options.extraSeedPeers);
+    }
+
     private addPeers(peers: Peer[]): void {
         // Filter out unreachable peers
 
@@ -439,23 +446,28 @@ export class ElectrumClient {
                 if (peer.ports['ssl']) {
                     peer.preferTransport = Transport.SSL;
                     this.addressBook.set(peer.host, peer);
+                    return
+                }
+                if (peer.ports['tcp']) {
+                    peer.preferTransport = Transport.TCP;
+                    this.addressBook.set(peer.host, peer);
                     return;
-                } // Fallthrough on purpose
+                }
             case Transport.SSL:
                 if (peer.ports['tcp']) {
                     peer.preferTransport = Transport.TCP;
                     this.addressBook.set(peer.host, peer);
                     return;
-                } // Fallthrough on purpose
-            case Transport.TCP:
+                }
+            // case Transport.TCP:
+            //     delete peer.preferTransport;
+            //     this.addressBook.delete(peer.host);
+            //     return;
+            default:
                 delete peer.preferTransport;
-                this.addressBook.set(peer.host, peer);
-            default: break;
+                this.addressBook.delete(peer.host);
+                break;
         }
-
-        // Only remove non-seedlist peers
-        if (GenesisConfig.SEED_PEERS.find(seed => seed.host === peer.host)) return;
-        this.addressBook.delete(peer.host);
     }
 
     private getConfirmationHeight(blockHeight: number): number {
