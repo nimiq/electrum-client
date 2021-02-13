@@ -97,7 +97,7 @@ export class ElectrumWS {
         });
 
         console.debug('ElectrumWS SEND:', method, ...params);
-        this.ws.send(stringToBytes(JSON.stringify(payload) + (this.options.proxy ? '\n' : '')));
+        this.ws.send(this.options.proxy ? stringToBytes(JSON.stringify(payload) + '\n') : JSON.stringify(payload));
 
         return promise;
     }
@@ -155,7 +155,7 @@ export class ElectrumWS {
             url = `${url}?token=${this.options.token}`;
         }
 
-        this.ws = new WebSocket(url, 'binary');
+        this.ws = new WebSocket(url, this.options.proxy ? 'binary' : undefined);
         this.ws.binaryType = 'arraybuffer';
 
         this.ws.addEventListener('open', this.onOpen.bind(this));
@@ -188,7 +188,7 @@ export class ElectrumWS {
 
     private onMessage(msg: MessageEvent) {
         // Handle potential multi-line frames
-        const raw = bytesToString(msg.data as Uint8Array);
+        const raw = typeof msg.data === 'string' ? msg.data : bytesToString(msg.data);
         const lines = raw.split('\n').filter(line => line.length > 0);
 
         for (const line of lines) {
