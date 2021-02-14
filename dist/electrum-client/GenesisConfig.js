@@ -56,7 +56,6 @@ GenesisConfig.CONFIGS = {
         NETWORK_NAME: Network.MAIN,
         SEED_PEERS: [
             { host: 'electrum.blockstream.info', ports: { wss: null, ssl: 50002, tcp: 50001 }, ip: '', version: '' },
-            { host: 'btccore-main.bdnodes.net', ports: { wss: null, ssl: 50002, tcp: null }, ip: '', version: '' },
             { host: 'bitcoin.aranguren.org', ports: { wss: null, ssl: 50002, tcp: 50001 }, ip: '', version: '' },
             { host: 'bitcoin.lukechilds.co', ports: { wss: null, ssl: 50002, tcp: 50001 }, ip: '', version: '' },
             { host: 'skbxmit.coinjoined.com', ports: { wss: null, ssl: 50002, tcp: 50001 }, ip: '', version: '' },

@@ -76,4 +76,5 @@ export declare type Peer = {
     };
     pruningLimit?: number;
     preferTransport?: Transport;
+    highPriority?: boolean;
 };

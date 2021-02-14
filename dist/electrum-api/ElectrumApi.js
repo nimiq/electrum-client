@@ -1,5 +1,5 @@
 import * as BitcoinJS from 'bitcoinjs-lib';
-import { ElectrumWS, bytesToHex, hexToBytes, } from '../electrum-ws/index';
+import { ElectrumWS, ElectrumWSEvent, bytesToHex, hexToBytes, } from '../electrum-ws/index';
 import { transactionToPlain, blockHeaderToPlain, } from './helpers';
 export class ElectrumApi {
     constructor(options = {}) {
@@ -22,6 +22,14 @@ export class ElectrumApi {
             wsOptions.reconnect = this.options.reconnect;
         this.socket = new ElectrumWS(this.options.endpoint, wsOptions);
     }
+    async waitForConnectionEstablished() {
+        if (this.socket.isConnected())
+            return true;
+        return new Promise((resolve, reject) => {
+            this.socket.once(ElectrumWSEvent.CONNECTED, () => (resolve(true), reject = () => { }));
+            this.socket.once(ElectrumWSEvent.CLOSE, () => (reject(new Error('Unable to establish a WebSocket connection')), resolve = () => { }));
+        });
+    }
     async getBalance(address) {
         return this.socket.request('blockchain.scripthash.get_balance', await this.addressToScriptHash(address));
     }
@@ -38,7 +46,7 @@ export class ElectrumApi {
     }
     async getTransaction(hash, block) {
         if (block)
-            this.proofTransaction(hash, block);
+            await this.proofTransaction(hash, block);
         const raw = await this.socket.request('blockchain.transaction.get', hash);
         return transactionToPlain(raw, this.options.network);
     }

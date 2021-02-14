@@ -18,9 +18,10 @@ export class ElectrumClient {
         this.transactionsWaitingForConfirmation = new Map();
         this.options = {
             requiredBlockConfirmations: 6,
+            extraSeedPeers: [],
             ...options,
         };
-        this.addPeers(GenesisConfig.SEED_PEERS);
+        this.resetPeers();
         this.connect();
     }
     getHeadHash() {
@@ -289,7 +290,25 @@ export class ElectrumClient {
     }
     async connect() {
         this.onConsensusChanged(ConsensusState.CONNECTING);
-        const peer = [...this.addressBook.values()][Math.floor(Math.random() * this.addressBook.size)];
+        if (this.addressBook.size === 0)
+            this.resetPeers();
+        let peers = [];
+        for (const transport of [Transport.WSS, Transport.SSL, Transport.TCP]) {
+            peers = [...this.addressBook.values()].filter((peer) => {
+                const protocol = [null, 'tcp', 'ssl', 'wss'][transport];
+                if (!peer.ports[protocol])
+                    return false;
+                if (peer.preferTransport && peer.preferTransport < transport)
+                    return false;
+                return true;
+            });
+            if (peers.length > 0)
+                break;
+        }
+        const highPriorityPeers = peers.filter(peer => peer.highPriority);
+        if (highPriorityPeers.length > 0)
+            peers = highPriorityPeers;
+        const peer = peers[Math.floor(Math.random() * peers.length)];
         const agentOptions = this.options.websocketProxy
             ? {
                 tcpProxyUrl: this.options.websocketProxy.tcp,
@@ -316,6 +335,12 @@ export class ElectrumClient {
         }
         this.addPeers(await agent.getPeers());
     }
+    resetPeers() {
+        if (this.addressBook.size > 0)
+            this.addressBook.clear();
+        this.addPeers(GenesisConfig.SEED_PEERS);
+        this.addPeers(this.options.extraSeedPeers);
+    }
     addPeers(peers) {
         peers = peers.filter(peer => {
             if (peer.host.endsWith('.onion'))
@@ -331,6 +356,11 @@ export class ElectrumClient {
         }
     }
     removePeer(peer, transport) {
+        if (peer.highPriority) {
+            peer.highPriority = false;
+            this.addressBook.set(peer.host, peer);
+            return;
+        }
         switch (transport) {
             case Transport.WSS:
                 if (peer.ports['ssl']) {
@@ -346,12 +376,9 @@ export class ElectrumClient {
                 }
             case Transport.TCP:
                 delete peer.preferTransport;
-                this.addressBook.set(peer.host, peer);
-            default: break;
+                this.addressBook.delete(peer.host);
+                return;
         }
-        if (GenesisConfig.SEED_PEERS.find(seed => seed.host === peer.host))
-            return;
-        this.addressBook.delete(peer.host);
     }
     getConfirmationHeight(blockHeight) {
         return blockHeight + this.options.requiredBlockConfirmations - 1;
@@ -375,7 +402,7 @@ export class ElectrumClient {
             }
         }
     }
-    async onConsensusChanged(state) {
+    onConsensusChanged(state) {
         if (state === this.consensusState)
             return;
         this.consensusState = state;
@@ -408,7 +435,7 @@ export class ElectrumClient {
         console.debug('Client: Consensus failed: last agent closed');
         this.connect();
     }
-    async onHeadChanged(block, reason, revertedBlocks, adoptedBlocks) {
+    onHeadChanged(block, reason, revertedBlocks, adoptedBlocks) {
         const previousBlock = this.head;
         this.head = block;
         if (this.consensusState === ConsensusState.ESTABLISHED && (!previousBlock || block.blockHash !== previousBlock.blockHash)) {

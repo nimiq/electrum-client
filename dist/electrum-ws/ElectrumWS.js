@@ -1,17 +1,27 @@
+import { Observable } from './Observable';
 import { stringToBytes, bytesToString } from './helpers';
+export var ElectrumWSEvent;
+(function (ElectrumWSEvent) {
+    ElectrumWSEvent["OPEN"] = "open";
+    ElectrumWSEvent["CLOSE"] = "close";
+    ElectrumWSEvent["CONNECTED"] = "connected";
+    ElectrumWSEvent["DISCONNECTED"] = "disconnected";
+    ElectrumWSEvent["RECONNECTING"] = "reconnecting";
+    ElectrumWSEvent["ERROR"] = "error";
+    ElectrumWSEvent["MESSAGE"] = "message";
+})(ElectrumWSEvent || (ElectrumWSEvent = {}));
 export const DEFAULT_ENDPOINT = 'wss://api.nimiqwatch.com:50002';
 export const DEFAULT_TOKEN = 'mainnet:electrum.blockstream.info';
 const RECONNECT_TIMEOUT = 1000;
+const CONNECTED_TIMEOUT = 500;
 const REQUEST_TIMEOUT = 1000 * 10;
 const CLOSE_CODE = 1000;
-export class ElectrumWS {
+export class ElectrumWS extends Observable {
     constructor(endpoint = DEFAULT_ENDPOINT, options = {}) {
+        super();
         this.requests = new Map();
         this.subscriptions = new Map();
         this.connected = false;
-        this.connectedPromise = null;
-        this.connectedResolver = () => { };
-        this.connectedRejector = (error) => { };
         this.reconnectionTimeout = -1;
         this.incompleteMessage = '';
         this.endpoint = endpoint;
@@ -20,8 +30,12 @@ export class ElectrumWS {
             token: DEFAULT_TOKEN,
             reconnect: true,
         }, options);
-        this.setupConnectedPromise();
         this.connect();
+        Object.values(ElectrumWSEvent).forEach((ev) => {
+            this.on(ev, (e) => e
+                ? console.debug(`ElectrumWS - ${ev.toUpperCase()}:`, e)
+                : console.debug(`ElectrumWS - ${ev.toUpperCase()}`));
+        });
     }
     async request(method, ...params) {
         let id;
@@ -34,7 +48,9 @@ export class ElectrumWS {
             params,
             id,
         };
-        await this.connectedPromise;
+        if (!this.connected) {
+            await new Promise((resolve) => this.once(ElectrumWSEvent.CONNECTED, () => resolve(true)));
+        }
         const promise = new Promise((resolve, reject) => {
             const timeout = window.setTimeout(() => {
                 this.requests.delete(id);
@@ -48,7 +64,7 @@ export class ElectrumWS {
             });
         });
         console.debug('ElectrumWS SEND:', method, ...params);
-        this.ws.send(stringToBytes(JSON.stringify(payload) + (this.options.proxy ? '\n' : '')));
+        this.ws.send(this.options.proxy ? stringToBytes(JSON.stringify(payload) + '\n') : JSON.stringify(payload));
         return promise;
     }
     async subscribe(method, callback, ...params) {
@@ -63,10 +79,11 @@ export class ElectrumWS {
         this.subscriptions.delete(subscriptionKey);
         return this.request(`${method}.unsubscribe`, ...params);
     }
-    close(reason) {
+    isConnected() {
+        return this.connected;
+    }
+    async close(reason) {
         this.options.reconnect = false;
-        this.connectedPromise.catch(() => { });
-        this.connectedRejector(new Error(reason));
         for (const [id, request] of this.requests) {
             window.clearTimeout(request.timeout);
             this.requests.delete(id);
@@ -75,53 +92,51 @@ export class ElectrumWS {
         }
         window.clearTimeout(this.reconnectionTimeout);
         if (this.ws.readyState === WebSocket.CONNECTING || this.ws.readyState === WebSocket.OPEN) {
+            const closingPromise = new Promise((resolve) => this.once(ElectrumWSEvent.CLOSE, () => resolve(true)));
             this.ws.close(CLOSE_CODE, reason);
+            return closingPromise;
         }
-    }
-    setupConnectedPromise() {
-        this.connectedPromise = new Promise((resolve, reject) => {
-            this.connectedResolver = resolve;
-            this.connectedRejector = reject;
-        });
     }
     connect() {
         let url = this.endpoint;
-        if (this.options.token) {
+        if (this.options.proxy && this.options.token) {
             url = `${url}?token=${this.options.token}`;
         }
-        this.ws = new WebSocket(url, 'binary');
+        this.ws = new WebSocket(url, this.options.proxy ? 'binary' : undefined);
         this.ws.binaryType = 'arraybuffer';
         this.ws.addEventListener('open', this.onOpen.bind(this));
         this.ws.addEventListener('message', this.onMessage.bind(this));
         this.ws.addEventListener('error', this.onError.bind(this));
         this.ws.addEventListener('close', this.onClose.bind(this));
     }
-    async onOpen() {
-        console.debug('ElectrumWS OPEN');
-        this.connected = true;
-        this.connectedResolver();
-        for (const [subscriptionKey, callback] of this.subscriptions) {
-            const params = subscriptionKey.split('-');
-            const method = params.shift();
-            if (!method) {
-                console.warn('Cannot resubscribe, no method in subscription key:', subscriptionKey);
-                continue;
-            }
-            this.subscribe(method, callback, ...params).catch((error) => {
-                if (this.ws.readyState === WebSocket.CONNECTING || this.ws.readyState === WebSocket.OPEN) {
-                    this.ws.close(CLOSE_CODE, error.message);
+    onOpen() {
+        this.fire(ElectrumWSEvent.OPEN);
+        this.connectedTimeout = window.setTimeout(() => {
+            this.connected = true;
+            this.fire(ElectrumWSEvent.CONNECTED);
+            for (const [subscriptionKey, callback] of this.subscriptions) {
+                const params = subscriptionKey.split('-');
+                const method = params.shift();
+                if (!method) {
+                    console.warn('Cannot resubscribe, no method in subscription key:', subscriptionKey);
+                    continue;
                 }
-            });
-        }
+                this.subscribe(method, callback, ...params).catch((error) => {
+                    if (this.ws.readyState === WebSocket.CONNECTING || this.ws.readyState === WebSocket.OPEN) {
+                        this.ws.close(CLOSE_CODE, error.message);
+                    }
+                });
+            }
+        }, CONNECTED_TIMEOUT);
     }
     onMessage(msg) {
-        const raw = bytesToString(msg.data);
+        const raw = typeof msg.data === 'string' ? msg.data : bytesToString(msg.data);
         const lines = raw.split('\n').filter(line => line.length > 0);
         for (const line of lines) {
             const response = this.parseLine(line);
             if (!response)
                 continue;
-            console.debug('ElectrumWS MSG:', response);
+            this.fire(ElectrumWSEvent.MESSAGE, response);
             if ('id' in response && this.requests.has(response.id)) {
                 const request = this.requests.get(response.id);
                 window.clearTimeout(request.timeout);
@@ -162,14 +177,19 @@ export class ElectrumWS {
         return false;
     }
     onError(event) {
-        if (event.error)
+        if (event.error) {
             console.error('ElectrumWS ERROR:', event.error);
+            this.fire(ElectrumWSEvent.ERROR, event.error);
+        }
     }
     onClose(event) {
-        console.debug('ElectrumWS CLOSE');
-        if (this.options.reconnect) {
-            if (this.connected)
-                this.setupConnectedPromise();
+        this.fire(ElectrumWSEvent.CLOSE, event);
+        if (!this.connected)
+            window.clearTimeout(this.connectedTimeout);
+        else
+            this.fire(ElectrumWSEvent.DISCONNECTED);
+        if (this.options.reconnect && this.connected) {
+            this.fire(ElectrumWSEvent.RECONNECTING);
             this.reconnectionTimeout = window.setTimeout(() => this.connect(), RECONNECT_TIMEOUT);
         }
         this.connected = false;

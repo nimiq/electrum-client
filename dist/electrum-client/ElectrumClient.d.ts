@@ -1,4 +1,4 @@
-import { PlainTransaction, PlainBlockHeader } from '../electrum-api/types';
+import { Peer, PlainTransaction, PlainBlockHeader, Balance, Receipt } from '../electrum-api/types';
 import { Handle, ConsensusChangedListener, HeadChangedListener, TransactionListener, TransactionDetails } from './types';
 declare type ElectrumClientOptions = {
     requiredBlockConfirmations: number;
@@ -6,6 +6,7 @@ declare type ElectrumClientOptions = {
         tcp: string | false;
         ssl: string | false;
     };
+    extraSeedPeers: Peer[];
 };
 export declare class ElectrumClient {
     private consensusState;
@@ -24,9 +25,9 @@ export declare class ElectrumClient {
     getHeadHeight(): number | undefined;
     getHeadBlock(): PlainBlockHeader | undefined;
     getBlockAt(height: number): Promise<PlainBlockHeader>;
-    getBalance(address: string): Promise<import("../electrum-api").Balance>;
+    getBalance(address: string): Promise<Balance>;
     getTransaction(hash: string, block?: PlainBlockHeader): Promise<PlainTransaction>;
-    getTransactionReceiptsByAddress(address: string): Promise<import("../electrum-api").Receipt[]>;
+    getTransactionReceiptsByAddress(address: string): Promise<Receipt[]>;
     getTransactionsByAddress(address: string, sinceBlockHeight?: number, knownTransactions?: TransactionDetails[], limit?: number): Promise<TransactionDetails[]>;
     sendTransaction(serializedTx: string): Promise<TransactionDetails>;
     estimateFees(targetBlocks?: number[]): Promise<{
@@ -38,8 +39,9 @@ export declare class ElectrumClient {
     addHeadChangedListener(listener: HeadChangedListener): Handle;
     addTransactionListener(listener: TransactionListener, addresses: string[]): Handle;
     removeListener(handle: Handle): void;
-    waitForConsensusEstablished(): Promise<unknown>;
+    waitForConsensusEstablished(): Promise<void>;
     private connect;
+    private resetPeers;
     private addPeers;
     private removePeer;
     private getConfirmationHeight;
@@ -47,7 +49,7 @@ export declare class ElectrumClient {
     private clearTransactionFromConfirm;
     private onConsensusChanged;
     private onConsensusFailed;
-    onHeadChanged(block: PlainBlockHeader, reason: string, revertedBlocks: PlainBlockHeader[], adoptedBlocks: PlainBlockHeader[]): Promise<void>;
+    private onHeadChanged;
     private onPendingTransaction;
     private onMinedTransaction;
     private onConfirmedTransaction;

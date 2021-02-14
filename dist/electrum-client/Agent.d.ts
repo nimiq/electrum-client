@@ -1,4 +1,4 @@
-import { Observable } from './Observable';
+import { Observable } from '../electrum-ws/Observable';
 import { PlainBlockHeader, Peer, Receipt, PlainTransaction, Transport } from '../electrum-api/types';
 export declare enum Event {
     BLOCK = "block",

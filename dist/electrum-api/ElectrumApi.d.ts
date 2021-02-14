@@ -13,6 +13,7 @@ export declare class ElectrumApi {
     constructor(options?: Omit<ElectrumApiOptions, 'network'> & {
         network?: 'bitcoin' | 'testnet' | BitcoinJS.Network;
     });
+    waitForConnectionEstablished(): Promise<unknown>;
     getBalance(address: string): Promise<Balance>;
     getReceipts(addressOrScriptHash: string): Promise<Receipt[]>;
     getTransaction(hash: string, block?: PlainBlockHeader): Promise<PlainTransaction>;
@@ -25,10 +26,10 @@ export declare class ElectrumApi {
     broadcastTransaction(rawTx: string): Promise<PlainTransaction>;
     subscribeReceipts(address: string, callback: (receipts: Receipt[]) => any): Promise<void>;
     subscribeHeaders(callback: (header: PlainBlockHeader) => any): Promise<void>;
-    setProtocolVersion(clientName: string, protocolVersion: string): Promise<string[]>;
+    setProtocolVersion(clientName: string, protocolVersion: string | string[]): Promise<string[]>;
     getFeatures(): Promise<PeerFeatures>;
     getPeers(): Promise<Peer[]>;
     ping(): Promise<null>;
-    close(reason: string): void;
+    close(reason: string): Promise<unknown>;
     private addressToScriptHash;
 }
