@@ -1,3 +1,4 @@
+import { Observable } from './Observable';
 import { stringToBytes, bytesToString } from './helpers';
 
 type RpcResponse = {
@@ -29,14 +30,26 @@ export type ElectrumWSOptions = {
     reconnect: boolean,
 }
 
+export enum ElectrumWSEvent {
+    OPEN = 'open',
+    CLOSE = 'close',
+    CONNECTED = 'connected',
+    DISCONNECTED = 'disconnected',
+    RECONNECTING = 'reconnecting',
+    ERROR = 'error',
+    MESSAGE = 'message',
+}
+
 export const DEFAULT_ENDPOINT = 'wss://api.nimiqwatch.com:50002';
 export const DEFAULT_TOKEN = 'mainnet:electrum.blockstream.info';
 
 const RECONNECT_TIMEOUT = 1000;
+const CONNECTED_TIMEOUT = 500;
 const REQUEST_TIMEOUT = 1000 * 10; // 10 seconds
 const CLOSE_CODE = 1000; // 1000 indicates a normal closure, meaning that the purpose for which the connection was established has been fulfilled
 
-export class ElectrumWS {
+
+export class ElectrumWS extends Observable {
     private options: ElectrumWSOptions;
     private endpoint: string;
 
@@ -44,9 +57,7 @@ export class ElectrumWS {
     private subscriptions = new Map<string, (...payload: any[]) => any>();
 
     private connected = false;
-    private connectedPromise: Promise<void> | null = null;
-    private connectedResolver = () => {};
-    private connectedRejector = (error: Error) => {};
+    private connectedTimeout: number | undefined;
 
     private reconnectionTimeout = -1;
 
@@ -55,6 +66,8 @@ export class ElectrumWS {
     public ws!: WebSocket;
 
     constructor(endpoint = DEFAULT_ENDPOINT, options: Partial<ElectrumWSOptions> = {}) {
+        super();
+
         this.endpoint = endpoint;
 
         this.options = Object.assign({
@@ -63,8 +76,15 @@ export class ElectrumWS {
             reconnect: true,
         }, options);
 
-        this.setupConnectedPromise();
         this.connect();
+
+        Object.values(ElectrumWSEvent).forEach((ev: string) => {
+            this.on(ev, (e: any) => e
+                ? console.debug(`ElectrumWS - ${ev.toUpperCase()}:`, e)
+                : console.debug(`ElectrumWS - ${ev.toUpperCase()}`),
+            );
+        });
+
     }
 
     public async request(method: string, ...params: (string | number | (string | number)[])[]): Promise<any> {
@@ -80,7 +100,9 @@ export class ElectrumWS {
             id,
         };
 
-        await this.connectedPromise;
+        if (!this.connected) {
+            await new Promise((resolve) => this.once(ElectrumWSEvent.CONNECTED, () => resolve(true)));
+        }
 
         const promise = new Promise((resolve, reject) => {
             const timeout = window.setTimeout(() => {
@@ -119,13 +141,12 @@ export class ElectrumWS {
         return this.request(`${method}.unsubscribe`, ...params);
     }
 
-    public close(reason: string) {
+    public isConnected() {
+        return this.connected;
+    }
+
+    public async close(reason: string) {
         this.options.reconnect = false;
-
-        // Add an error handler, to prevent uncaught exceptions in case no request is currently awaiting it.
-        this.connectedPromise!.catch(() => {});
-
-        this.connectedRejector(new Error(reason));
 
         // Reject all pending requests
         for (const [id, request] of this.requests) {
@@ -138,15 +159,11 @@ export class ElectrumWS {
         window.clearTimeout(this.reconnectionTimeout);
 
         if (this.ws.readyState === WebSocket.CONNECTING || this.ws.readyState === WebSocket.OPEN) {
+            /* The websocket connection is not closed instantly and can take a very long time to trigger the close event */
+            const closingPromise = new Promise((resolve) => this.once(ElectrumWSEvent.CLOSE, () => resolve(true)));
             this.ws.close(CLOSE_CODE, reason);
+            return closingPromise;
         }
-    }
-
-    private setupConnectedPromise() {
-        this.connectedPromise = new Promise((resolve, reject) => {
-            this.connectedResolver = resolve;
-            this.connectedRejector = reject;
-        });
     }
 
     private connect() {
@@ -164,26 +181,28 @@ export class ElectrumWS {
         this.ws.addEventListener('close', this.onClose.bind(this));
     }
 
-    private async onOpen() {
-        console.debug('ElectrumWS OPEN');
+    private onOpen() {
+        this.fire(ElectrumWSEvent.OPEN);
 
-        this.connected = true;
-        this.connectedResolver();
+        this.connectedTimeout = window.setTimeout(() => {
+            this.connected = true;
+            this.fire(ElectrumWSEvent.CONNECTED);
 
-        // Resubscribe to registered subscriptions
-        for (const [subscriptionKey, callback] of this.subscriptions) {
-            const params = subscriptionKey.split('-');
-            const method = params.shift();
-            if (!method) {
-                console.warn('Cannot resubscribe, no method in subscription key:', subscriptionKey);
-                continue;
-            }
-            this.subscribe(method, callback, ...params).catch((error) => {
-                if (this.ws.readyState === WebSocket.CONNECTING || this.ws.readyState === WebSocket.OPEN) {
-                    this.ws.close(CLOSE_CODE, error.message);
+            // Resubscribe to registered subscriptions
+            for (const [subscriptionKey, callback] of this.subscriptions) {
+                const params = subscriptionKey.split('-');
+                const method = params.shift();
+                if (!method) {
+                    console.warn('Cannot resubscribe, no method in subscription key:', subscriptionKey);
+                    continue;
                 }
-            });
-        }
+                this.subscribe(method, callback, ...params).catch((error) => {
+                    if (this.ws.readyState === WebSocket.CONNECTING || this.ws.readyState === WebSocket.OPEN) {
+                        this.ws.close(CLOSE_CODE, error.message);
+                    }
+                });
+            }
+        }, CONNECTED_TIMEOUT);
     }
 
     private onMessage(msg: MessageEvent) {
@@ -194,7 +213,7 @@ export class ElectrumWS {
         for (const line of lines) {
             const response = this.parseLine(line);
             if (!response) continue;
-            console.debug('ElectrumWS MSG:', response);
+            this.fire(ElectrumWSEvent.MESSAGE, response);
 
             if ('id' in response && this.requests.has(response.id)) {
                 const request = this.requests.get(response.id)!;
@@ -244,14 +263,20 @@ export class ElectrumWS {
     }
 
     private onError(event: Event) {
-        if ((event as ErrorEvent).error) console.error('ElectrumWS ERROR:', (event as ErrorEvent).error);
+        if ((event as ErrorEvent).error) {
+            console.error('ElectrumWS ERROR:', (event as ErrorEvent).error);
+            this.fire(ElectrumWSEvent.ERROR, (event as ErrorEvent).error);
+        }
     }
 
     private onClose(event: CloseEvent | Error) {
-        console.debug('ElectrumWS CLOSE');
+        this.fire(ElectrumWSEvent.CLOSE, event)
 
-        if (this.options.reconnect) {
-            if (this.connected) this.setupConnectedPromise();
+        if (!this.connected) window.clearTimeout(this.connectedTimeout);
+        else this.fire(ElectrumWSEvent.DISCONNECTED);
+
+        if (this.options.reconnect && this.connected) {
+            this.fire(ElectrumWSEvent.RECONNECTING);
             this.reconnectionTimeout = window.setTimeout(() => this.connect(), RECONNECT_TIMEOUT);
         }
 

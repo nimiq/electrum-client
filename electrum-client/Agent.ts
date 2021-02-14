@@ -1,5 +1,5 @@
 import { ElectrumApi } from '../electrum-api/ElectrumApi';
-import { Observable } from './Observable';
+import { Observable } from '../electrum-ws/Observable';
 import { PlainBlockHeader, Peer, Receipt, PlainTransaction, Transport } from '../electrum-api/types';
 import { GenesisConfig, Network } from './GenesisConfig';
 import { TransactionStore, BlockStore } from './Stores';
@@ -93,6 +93,8 @@ export class Agent extends Observable {
 
     public async sync() {
         if (this.handshaking || this.syncing || this.synced) return;
+
+        await this.connection!.waitForConnectionEstablished();
 
         this.handshaking = true;
         await this.handshake();
