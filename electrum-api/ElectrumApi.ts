@@ -3,6 +3,7 @@ import * as BitcoinJS from 'bitcoinjs-lib';
 import {
     ElectrumWS,
     ElectrumWSOptions,
+    ElectrumWSEvent,
     bytesToHex,
     hexToBytes,
 } from '../electrum-ws/index';
@@ -54,6 +55,18 @@ export class ElectrumApi {
         this.socket = new ElectrumWS(this.options.endpoint, wsOptions);
     }
 
+    public async waitForConnectionEstablished() {
+        if (this.socket.isConnected()) return true;
+
+        return new Promise((resolve, reject) => {
+            this.socket.once(ElectrumWSEvent.CONNECTED, () => (resolve(true), reject = () => {}));
+            this.socket.once(
+                ElectrumWSEvent.CLOSE,
+                () => (reject(new Error('Unable to establish a WebSocket connection')), resolve = () => {}),
+            );
+        });
+    }
+
     public async getBalance(address: string): Promise<Balance> {
         return this.socket.request('blockchain.scripthash.get_balance', await this.addressToScriptHash(address));
     }
@@ -78,7 +91,7 @@ export class ElectrumApi {
     }
 
     public async getTransaction(hash: string, block?: PlainBlockHeader): Promise<PlainTransaction> {
-        if (block) this.proofTransaction(hash, block); // Throws on failed proof
+        if (block) await this.proofTransaction(hash, block); // Throws on failed proof
         const raw: string = await this.socket.request('blockchain.transaction.get', hash);
         return transactionToPlain(raw, this.options.network);
     }
@@ -179,7 +192,7 @@ export class ElectrumApi {
         });
     }
 
-    public async setProtocolVersion(clientName: string, protocolVersion: string): Promise<string[]> {
+    public async setProtocolVersion(clientName: string, protocolVersion: string | string[]): Promise<string[]> {
         return this.socket.request('server.version', clientName, protocolVersion);
     }
 

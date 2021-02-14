@@ -1,5 +1,5 @@
 import { transactionFromPlain } from '../electrum-api';
-import { Peer, PlainTransaction, PlainBlockHeader, Transport } from '../electrum-api/types';
+import { Peer, PlainTransaction, PlainBlockHeader, Transport, Balance, Receipt } from '../electrum-api/types';
 
 import { Agent, Event as AgentEvent, ElectrumAgentOptions } from './Agent';
 import {
@@ -20,6 +20,7 @@ type ElectrumClientOptions = {
         tcp: string | false,
         ssl: string | false,
     },
+    extraSeedPeers: Peer[],
 }
 
 export class ElectrumClient {
@@ -42,11 +43,12 @@ export class ElectrumClient {
     constructor(options: Partial<ElectrumClientOptions> = {}) {
         this.options = {
             requiredBlockConfirmations: 6,
+            extraSeedPeers: [],
             ...options,
         };
 
         // Seed addressbook
-        this.addPeers(GenesisConfig.SEED_PEERS);
+        this.resetPeers();
 
         this.connect();
     }
@@ -63,7 +65,7 @@ export class ElectrumClient {
         return this.head || undefined;
     }
 
-    public async getBlockAt(height: number) {
+    public async getBlockAt(height: number): Promise<PlainBlockHeader> {
         const storedBlock = BlockStore.get(height);
         if (storedBlock) return storedBlock;
 
@@ -77,7 +79,7 @@ export class ElectrumClient {
         throw new Error(`Failed to get block header at ${height}`);
     }
 
-    public async getBalance(address: string) {
+    public async getBalance(address: string): Promise<Balance> {
         for (const agent of this.agents) {
             try {
                 return await agent.getBalance(address);
@@ -88,7 +90,7 @@ export class ElectrumClient {
         throw new Error(`Failed to get balance for ${address}`);
     }
 
-    public async getTransaction(hash: string, block?: PlainBlockHeader) {
+    public async getTransaction(hash: string, block?: PlainBlockHeader): Promise<PlainTransaction> {
         if (!block) {
             const storedTransaction = TransactionStore.get(hash);
             if (storedTransaction) return storedTransaction;
@@ -104,7 +106,7 @@ export class ElectrumClient {
         throw new Error(`Failed to get transaction ${hash}`);
     }
 
-    public async getTransactionReceiptsByAddress(address: string) {
+    public async getTransactionReceiptsByAddress(address: string): Promise<Receipt[]> {
         for (const agent of this.agents) {
             try {
                 return await agent.getTransactionReceipts(address);
@@ -115,7 +117,7 @@ export class ElectrumClient {
         throw new Error(`Failed to get transaction receipts for ${address}`);
     }
 
-    public async getTransactionsByAddress(address: string, sinceBlockHeight = 0, knownTransactions: TransactionDetails[] = [], limit = Infinity) {
+    public async getTransactionsByAddress(address: string, sinceBlockHeight = 0, knownTransactions: TransactionDetails[] = [], limit = Infinity): Promise<TransactionDetails[]> {
         // Prepare map of known transactions
         const knownTxs = new Map<string, TransactionDetails>();
         if (knownTransactions) {
@@ -239,7 +241,10 @@ export class ElectrumClient {
         };
     }
 
-    public async estimateFees(targetBlocks = [25, 10, 5, 2]) { // Default FEE_ETA_TARGETS of Electrum wallet
+    // 25, 10, 5 and 2 are the default FEE_ETA_TARGETS of Electrum wallet
+    public async estimateFees(targetBlocks = [25, 10, 5, 2]): Promise<{
+        [target: number]: number | undefined;
+    }> {
         const estimates: number[][] = [];
         for (const agent of this.agents) {
             try {
@@ -273,7 +278,7 @@ export class ElectrumClient {
         return result;
     }
 
-    public async getMempoolFees() {
+    public async getMempoolFees(): Promise<[number, number][]> {
         for (const agent of this.agents) {
             try {
                 return await agent.getFeeHistogram();
@@ -284,7 +289,7 @@ export class ElectrumClient {
         throw new Error(`Failed to get mempool fees`);
     }
 
-    public async getMinimumRelayFee() {
+    public async getMinimumRelayFee(): Promise<number> {
         for (const agent of this.agents) {
             try {
                 return await agent.getMinimumRelayFee();
@@ -323,7 +328,7 @@ export class ElectrumClient {
         return listenerId;
     }
 
-    public removeListener(handle: Handle) {
+    public removeListener(handle: Handle): void {
         this.consensusChangedListeners.delete(handle);
         this.headChangedListeners.delete(handle);
         this.transactionListeners.delete(handle);
@@ -332,7 +337,7 @@ export class ElectrumClient {
         }
     }
 
-    public async waitForConsensusEstablished() {
+    public async waitForConsensusEstablished(): Promise<void> {
         return new Promise(resolve => {
             if (this.consensusState === ConsensusState.ESTABLISHED) {
                 resolve();
@@ -347,11 +352,27 @@ export class ElectrumClient {
         });
     }
 
-    private async connect() {
+    private async connect(): Promise<void> {
         this.onConsensusChanged(ConsensusState.CONNECTING);
 
-        // Connect to network
-        const peer = [...this.addressBook.values()][Math.floor(Math.random() * this.addressBook.size)];
+        if (this.addressBook.size === 0) this.resetPeers();
+
+        // Select peer from address book
+        let peers: Peer[] = [];
+        for (const transport of [Transport.WSS, Transport.SSL, Transport.TCP]) {
+            peers = [...this.addressBook.values()].filter((peer) => {
+                const protocol = [null, 'tcp', 'ssl', 'wss'][transport] as 'tcp' | 'ssl' | 'wss';
+                if (!peer.ports[protocol]) return false;
+                if (peer.preferTransport && peer.preferTransport < transport) return false;
+                return true;
+            });
+            if (peers.length > 0) break;
+        }
+
+        const highPriorityPeers = peers.filter(peer => peer.highPriority);
+        if (highPriorityPeers.length > 0) peers = highPriorityPeers;
+
+        const peer = peers[Math.floor(Math.random() * peers.length)];
         const agentOptions: ElectrumAgentOptions | undefined = this.options.websocketProxy
             ? {
                 tcpProxyUrl: this.options.websocketProxy.tcp,
@@ -359,6 +380,7 @@ export class ElectrumClient {
             }
             : undefined;
 
+        // Connect to network
         const agent = new Agent(peer, agentOptions);
 
         agent.on(AgentEvent.SYNCING, () => this.onConsensusChanged(ConsensusState.SYNCING));
@@ -384,7 +406,13 @@ export class ElectrumClient {
         this.addPeers(await agent.getPeers());
     }
 
-    private addPeers(peers: Peer[]) {
+    private resetPeers(): void {
+        if (this.addressBook.size > 0) this.addressBook.clear();
+        this.addPeers(GenesisConfig.SEED_PEERS);
+        this.addPeers(this.options.extraSeedPeers);
+    }
+
+    private addPeers(peers: Peer[]): void {
         // Filter out unreachable peers
 
         peers = peers.filter(peer => {
@@ -406,13 +434,19 @@ export class ElectrumClient {
         }
     }
 
-    private removePeer(peer: Peer, transport: Transport) {
+    private removePeer(peer: Peer, transport: Transport): void {
+        if (peer.highPriority) {
+            peer.highPriority = false;
+            this.addressBook.set(peer.host, peer);
+            return;
+        }
+
         switch (transport) {
             case Transport.WSS:
                 if (peer.ports['ssl']) {
                     peer.preferTransport = Transport.SSL;
                     this.addressBook.set(peer.host, peer);
-                    return;
+                    return
                 } // Fallthrough on purpose
             case Transport.SSL:
                 if (peer.ports['tcp']) {
@@ -422,20 +456,16 @@ export class ElectrumClient {
                 } // Fallthrough on purpose
             case Transport.TCP:
                 delete peer.preferTransport;
-                this.addressBook.set(peer.host, peer);
-            default: break;
+                this.addressBook.delete(peer.host);
+                return;
         }
-
-        // Only remove non-seedlist peers
-        if (GenesisConfig.SEED_PEERS.find(seed => seed.host === peer.host)) return;
-        this.addressBook.delete(peer.host);
     }
 
-    private getConfirmationHeight(blockHeight: number) {
+    private getConfirmationHeight(blockHeight: number): number {
         return blockHeight + this.options.requiredBlockConfirmations - 1;
     }
 
-    private queueTransactionForConfirmation(tx: TransactionDetails) {
+    private queueTransactionForConfirmation(tx: TransactionDetails): void {
         if (!tx.blockHeight) return;
         const confirmationHeight = this.getConfirmationHeight(tx.blockHeight);
         const map = this.transactionsWaitingForConfirmation.get(confirmationHeight) || new Map<string, TransactionDetails>();
@@ -443,7 +473,7 @@ export class ElectrumClient {
         this.transactionsWaitingForConfirmation.set(confirmationHeight, map);
     }
 
-    private clearTransactionFromConfirm(tx: PlainTransaction) {
+    private clearTransactionFromConfirm(tx: PlainTransaction): void {
         for (const [key, value] of this.transactionsWaitingForConfirmation.entries()) {
             if (value.has(tx.transactionHash)) {
                 value.delete(tx.transactionHash);
@@ -455,7 +485,7 @@ export class ElectrumClient {
         }
     }
 
-    private async onConsensusChanged(state: ConsensusState) {
+    private onConsensusChanged(state: ConsensusState): void {
         if (state === this.consensusState) return;
 
         this.consensusState = state;
@@ -484,7 +514,7 @@ export class ElectrumClient {
         }
     }
 
-    private onConsensusFailed(agent: Agent, reason: string) {
+    private onConsensusFailed(agent: Agent, reason: string): void {
         if (agent) {
             agent.allOff(AgentEvent.SYNCING);
             agent.allOff(AgentEvent.SYNCED);
@@ -498,7 +528,7 @@ export class ElectrumClient {
         this.connect();
     }
 
-    async onHeadChanged(block: PlainBlockHeader, reason: string, revertedBlocks: PlainBlockHeader[], adoptedBlocks: PlainBlockHeader[]) {
+    private onHeadChanged(block: PlainBlockHeader, reason: string, revertedBlocks: PlainBlockHeader[], adoptedBlocks: PlainBlockHeader[]): void {
         const previousBlock = this.head;
         this.head = block; // TODO: Check with consensus
 
@@ -543,7 +573,7 @@ export class ElectrumClient {
         }
     }
 
-    private onPendingTransaction(tx: PlainTransaction) {
+    private onPendingTransaction(tx: PlainTransaction): TransactionDetails {
         const details: TransactionDetails = {
             ...tx,
             state: TransactionState.PENDING,
@@ -559,7 +589,7 @@ export class ElectrumClient {
         return details;
     }
 
-    private onMinedTransaction(block: PlainBlockHeader, tx: PlainTransaction, blockNow?: PlainBlockHeader) {
+    private onMinedTransaction(block: PlainBlockHeader, tx: PlainTransaction, blockNow?: PlainBlockHeader): TransactionDetails {
         let state = TransactionState.MINED;
         let confirmations = 1;
         if (blockNow) {
@@ -586,7 +616,7 @@ export class ElectrumClient {
         return details;
     }
 
-    private onConfirmedTransaction(tx: TransactionDetails, blockNow: PlainBlockHeader) {
+    private onConfirmedTransaction(tx: TransactionDetails, blockNow: PlainBlockHeader): TransactionDetails {
         const details: TransactionDetails = {
             ...tx,
             state: TransactionState.CONFIRMED,
@@ -600,7 +630,10 @@ export class ElectrumClient {
         return details;
     }
 
-    private getListenersForTransaction(tx: PlainTransaction) {
+    private getListenersForTransaction(tx: PlainTransaction): {
+        listener: TransactionListener;
+        addresses: Set<string>;
+    }[] {
         return [...this.transactionListeners.values()].filter(({ addresses }) =>
             tx.inputs.some(input => input.address && addresses.has(input.address))
             || tx.outputs.some(output => output.address && addresses.has(output.address)));

@@ -1,11 +1,12 @@
 import { ElectrumApi } from '../electrum-api/ElectrumApi';
-import { Observable } from './Observable';
+import { Observable } from '../electrum-ws/Observable';
 import { PlainBlockHeader, Peer, Receipt, PlainTransaction, Transport } from '../electrum-api/types';
 import { GenesisConfig, Network } from './GenesisConfig';
 import { TransactionStore, BlockStore } from './Stores';
 import { name as CLIENT_NAME, version as CLIENT_VERSION } from '../package.json';
 
-const PROTOCOL_VERSION = '1.4';
+const PROTOCOL_VERSION_MIN = '1.4';
+const PROTOCOL_VERSION_MAX = '1.4.2';
 
 export enum Event {
     BLOCK = 'block',
@@ -92,6 +93,8 @@ export class Agent extends Observable {
 
     public async sync() {
         if (this.handshaking || this.syncing || this.synced) return;
+
+        await this.connection!.waitForConnectionEstablished();
 
         this.handshaking = true;
         await this.handshake();
@@ -210,7 +213,7 @@ export class Agent extends Observable {
             const timeout = setTimeout(() => reject(new Error('Handshake timeout')), HANDSHAKE_TIMEOUT);
 
             try {
-                await this.connection!.setProtocolVersion(`${CLIENT_NAME} ${CLIENT_VERSION}`, PROTOCOL_VERSION);
+                await this.connection!.setProtocolVersion(`${CLIENT_NAME} ${CLIENT_VERSION}`, [PROTOCOL_VERSION_MIN, PROTOCOL_VERSION_MAX]);
             } catch (error) {
                 reject(new Error('Incompatible protocol version'));
                 return;
