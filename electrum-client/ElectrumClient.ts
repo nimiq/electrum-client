@@ -14,7 +14,7 @@ import {
 import { BlockStore, TransactionStore } from './Stores';
 import { GenesisConfig, Network } from './GenesisConfig';
 
-type ElectrumClientOptions = {
+export type ElectrumClientOptions = {
     requiredBlockConfirmations: number,
     websocketProxy?: {
         tcp: string | false,
