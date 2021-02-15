@@ -68,6 +68,7 @@ export declare enum Transport {
 export declare type Peer = {
     ip: string;
     host: string;
+    wssPath?: string;
     version: string;
     ports: {
         tcp: number | null;
