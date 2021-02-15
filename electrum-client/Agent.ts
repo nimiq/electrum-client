@@ -58,12 +58,12 @@ export class Agent extends Observable {
             : undefined;
 
         if (peer.ports.wss && (!transport || transport === Transport.WSS)) {
-            console.debug(`Agent: Connecting to wss://${peer.host}:${peer.ports.wss}`);
+            console.debug(`Agent: Connecting to wss://${peer.host}:${peer.ports.wss}/${peer.wssPath || ''}`);
 
             this.transport = Transport.WSS;
             this.connection = new ElectrumApi({
                 network: GenesisConfig.NETWORK_NAME,
-                endpoint: `wss://${peer.host}:${peer.ports.wss}`,
+                endpoint: `wss://${peer.host}:${peer.ports.wss}/${peer.wssPath || ''}`,
                 proxy: false,
             });
         } else if (peer.ports.ssl && this.options.sslProxyUrl && (!transport || transport === Transport.SSL)) {
