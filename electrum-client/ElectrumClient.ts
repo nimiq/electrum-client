@@ -313,18 +313,18 @@ export class ElectrumClient {
     }
 
     public addTransactionListener(listener: TransactionListener, addresses: string[]): Handle {
-        const set = new Set(addresses);
+        const addressSet = new Set(addresses);
 
-        for (const address of set) {
+        for (const address of addressSet) {
             this.subscribedAddresses.add(address);
         }
         if (this.consensusState === ConsensusState.ESTABLISHED) {
             for (const agent of this.agents) {
-                agent.subscribe([...this.subscribedAddresses.values()]);
+                agent.subscribe([...addressSet.values()]);
             }
         }
         const listenerId = this.listenerId++;
-        this.transactionListeners.set(listenerId, {listener, addresses: set});
+        this.transactionListeners.set(listenerId, {listener, addresses: addressSet});
         return listenerId;
     }
 
@@ -495,10 +495,8 @@ export class ElectrumClient {
 
         if (state === ConsensusState.ESTABLISHED) {
             // Subscribe addresses
-            if (this.subscribedAddresses.size > 0) {
-                for (const agent of this.agents) {
-                    agent.subscribe([...this.subscribedAddresses.values()]);
-                }
+            for (const agent of this.agents) {
+                agent.subscribe([...this.subscribedAddresses.values()]);
             }
 
             // Update head block hash
