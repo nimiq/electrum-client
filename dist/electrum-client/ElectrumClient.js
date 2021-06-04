@@ -252,17 +252,17 @@ export class ElectrumClient {
         return listenerId;
     }
     addTransactionListener(listener, addresses) {
-        const set = new Set(addresses);
-        for (const address of set) {
+        const addressSet = new Set(addresses);
+        for (const address of addressSet) {
             this.subscribedAddresses.add(address);
         }
         if (this.consensusState === ConsensusState.ESTABLISHED) {
             for (const agent of this.agents) {
-                agent.subscribe([...this.subscribedAddresses.values()]);
+                agent.subscribe([...addressSet.values()]);
             }
         }
         const listenerId = this.listenerId++;
-        this.transactionListeners.set(listenerId, { listener, addresses: set });
+        this.transactionListeners.set(listenerId, { listener, addresses: addressSet });
         return listenerId;
     }
     removeListener(handle) {
@@ -410,10 +410,8 @@ export class ElectrumClient {
             listener(state);
         }
         if (state === ConsensusState.ESTABLISHED) {
-            if (this.subscribedAddresses.size > 0) {
-                for (const agent of this.agents) {
-                    agent.subscribe([...this.subscribedAddresses.values()]);
-                }
+            for (const agent of this.agents) {
+                agent.subscribe([...this.subscribedAddresses.values()]);
             }
             if (!this.head)
                 return;
