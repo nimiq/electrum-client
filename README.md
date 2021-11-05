@@ -2,10 +2,6 @@
 
 Access Bitcoin ElectrumX servers from browsers via a WebSocket-to-TCP proxy.
 
-> This package is called `electrum-client` but does not yet include the actual
-> client. Currently only the underlying `ElectrumWS` (websocket protocol wrapper)
-> and `ElectrumApi` (higher-level API) are implemented.
-
 ## Installation
 
 There is no NPM package yet, so you need to set the `#build` branch of this repo
