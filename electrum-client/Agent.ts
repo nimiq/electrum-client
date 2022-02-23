@@ -3,7 +3,7 @@ import { Observable } from '../electrum-ws/Observable';
 import { PlainBlockHeader, Peer, Receipt, PlainTransaction, Transport } from '../electrum-api/types';
 import { GenesisConfig, Network } from './GenesisConfig';
 import { TransactionStore, BlockStore } from './Stores';
-import { name as CLIENT_NAME, version as CLIENT_VERSION } from '../package.json';
+import packagejson from '../package.json';
 
 const PROTOCOL_VERSION_MIN = '1.4';
 const PROTOCOL_VERSION_MAX = '1.4.2';
@@ -213,7 +213,7 @@ export class Agent extends Observable {
             const timeout = setTimeout(() => reject(new Error('Handshake timeout')), HANDSHAKE_TIMEOUT);
 
             try {
-                await this.connection!.setProtocolVersion(`${CLIENT_NAME} ${CLIENT_VERSION}`, [PROTOCOL_VERSION_MIN, PROTOCOL_VERSION_MAX]);
+                await this.connection!.setProtocolVersion(`${packagejson.name} ${packagejson.version}`, [PROTOCOL_VERSION_MIN, PROTOCOL_VERSION_MAX]);
             } catch (error) {
                 reject(new Error('Incompatible protocol version'));
                 return;
