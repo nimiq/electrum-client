@@ -8,8 +8,13 @@
   "license": "Apache-2.0",
   "scripts": {
     "test": "jest",
-    "build": "tsc"
+    "build": "tsc",
+    "prepare": "npm run build"
   },
+  "files": [
+    "dist",
+    "src"
+  ],
   "dependencies": {
     "bitcoinjs-lib": "^5.1.10"
   },
