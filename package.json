@@ -1,6 +1,6 @@
 {
   "name": "@nimiq/electrum-client",
-  "version": "0.2.2",
+  "version": "0.3.0",
   "description": "Electrum utilities for the Nimiq ecosystem",
   "author": "Sören <soeren@nimiq.com>",
   "module": "dist/index.js",
