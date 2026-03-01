@@ -1,4 +1,7 @@
-import * as BitcoinJS from 'bitcoinjs-lib';
+/// <reference path="../bitcoinjs-lib.d.ts" />
+
+import * as networks from 'bitcoinjs-lib/src/networks';
+import { Transaction } from 'bitcoinjs-lib/src/transaction';
 import { transactionToPlain, transactionFromPlain, deriveAddressFromInput } from '../electrum-api';
 
 const VECTORS = [{
@@ -55,7 +58,7 @@ const VECTORS = [{
     inputAddresses: [
         '2MxBFEWKRPBy96BCxmuZuXkz5CfivDg8e1a',
     ],
-    network: BitcoinJS.networks.regtest,
+    network: networks.regtest,
 }, {
     // Bitpanda P2SH(P2WSH(P2PKH))
     // 9dc53a675b2ad8eea203913b2d8041bb3e961975fde40dae870fa1aac29f8d73
@@ -73,9 +76,9 @@ const VECTORS = [{
 describe('ElectrumApi', () => {
     it('can convert to and from PlainTransaction', () => {
         for (const vector of VECTORS) {
-            const tx = BitcoinJS.Transaction.fromHex(vector.raw);
+            const tx = Transaction.fromHex(vector.raw);
 
-            const plain = transactionToPlain(tx, vector.network || BitcoinJS.networks.bitcoin);
+            const plain = transactionToPlain(tx, vector.network || networks.bitcoin);
             const revived = transactionFromPlain(plain);
 
             expect(revived.getId()).toEqual(tx.getId());
@@ -84,11 +87,11 @@ describe('ElectrumApi', () => {
 
     it('can decode input addresses', () => {
         for (const vector of VECTORS) {
-            const tx = BitcoinJS.Transaction.fromHex(vector.raw);
+            const tx = Transaction.fromHex(vector.raw);
 
             const addresses = tx.ins.map(input => deriveAddressFromInput(
                 input,
-                vector.network || BitcoinJS.networks.bitcoin,
+                vector.network || networks.bitcoin,
             ));
 
             expect(addresses).toEqual(vector.inputAddresses);

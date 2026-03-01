@@ -1,4 +1,4 @@
-import * as BitcoinJS from 'bitcoinjs-lib';
+import { Block } from 'bitcoinjs-lib/src/block';
 import { Peer } from '../electrum-api';
 
 export enum Network {
@@ -45,7 +45,7 @@ export class GenesisConfig {
     static get GENESIS_HASH() {
         if (!GenesisConfig._config) throw new Error('GenesisConfig not initialized');
         if (!GenesisConfig._config.GENESIS_HASH) {
-            GenesisConfig._config.GENESIS_HASH = BitcoinJS.Block.fromHex(GenesisConfig._config.GENESIS_HEADER).getId();
+            GenesisConfig._config.GENESIS_HASH = Block.fromHex(GenesisConfig._config.GENESIS_HEADER).getId();
         }
         return GenesisConfig._config.GENESIS_HASH;
     }

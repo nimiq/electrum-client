@@ -1,4 +1,6 @@
-import * as BitcoinJS from 'bitcoinjs-lib';
+import { toOutputScript as addressToOutputScript } from 'bitcoinjs-lib/src/address';
+import * as networks from 'bitcoinjs-lib/src/networks';
+import type { Network } from 'bitcoinjs-lib/src/networks';
 
 import {
     ElectrumWS,
@@ -24,7 +26,7 @@ import {
 
 export type ElectrumApiOptions = {
     endpoint?: string,
-    network: BitcoinJS.Network,
+    network: Network,
     proxy?: boolean,
     token?: string,
     reconnect?: boolean;
@@ -34,17 +36,17 @@ export class ElectrumApi {
     private options: ElectrumApiOptions;
     private socket: ElectrumWS;
 
-    constructor(options: Omit<ElectrumApiOptions, 'network'> & { network?: 'bitcoin' | 'testnet' | BitcoinJS.Network } = {}) {
+    constructor(options: Omit<ElectrumApiOptions, 'network'> & { network?: 'bitcoin' | 'testnet' | Network } = {}) {
         if (typeof options.network === 'string') {
-            if (!(options.network in BitcoinJS.networks)) {
+            if (!(options.network in networks)) {
                 throw new Error('Invalid network name');
             }
-            options.network = BitcoinJS.networks[options.network];
+            options.network = networks[options.network];
         }
 
         this.options = {
             ...options,
-            network: options.network || BitcoinJS.networks.bitcoin,
+            network: options.network || networks.bitcoin,
         };
 
         const wsOptions: Partial<ElectrumWSOptions> = {};
@@ -220,8 +222,8 @@ export class ElectrumApi {
                     case 't': {
                         if (meta.substring(1).length === 0) {
                             // An omitted port number means default port
-                            switch (this.options.network || BitcoinJS.networks.bitcoin) {
-                                case BitcoinJS.networks.testnet: tcp = 60001; break;
+                            switch (this.options.network || networks.bitcoin) {
+                                case networks.testnet: tcp = 60001; break;
                                 default: tcp = 50001; break; // mainnet (bitcoin)
                             }
                         } else {
@@ -231,8 +233,8 @@ export class ElectrumApi {
                     case 's': {
                         if (meta.substring(1).length === 0) {
                             // An omitted port number means default port
-                            switch (this.options.network || BitcoinJS.networks.bitcoin) {
-                                case BitcoinJS.networks.testnet: ssl = 60002; break;
+                            switch (this.options.network || networks.bitcoin) {
+                                case networks.testnet: ssl = 60002; break;
                                 default: ssl = 50002; break; // mainnet (bitcoin)
                             }
                         } else {
@@ -242,8 +244,8 @@ export class ElectrumApi {
                     case 'w': {
                         if (meta.substring(1).length === 0) {
                             // An omitted port number means default port
-                            switch (this.options.network || BitcoinJS.networks.bitcoin) {
-                                case BitcoinJS.networks.testnet: wss = 60004; break;
+                            switch (this.options.network || networks.bitcoin) {
+                                case networks.testnet: wss = 60004; break;
                                 default: wss = 50004; break; // mainnet (bitcoin)
                             }
                         } else {
@@ -276,7 +278,7 @@ export class ElectrumApi {
     }
 
     private async addressToScriptHash(addr: string) {
-        const outputScript = BitcoinJS.address.toOutputScript(addr, this.options.network);
+        const outputScript = addressToOutputScript(addr, this.options.network);
 
         // Hash with SHA256
         const hash = new Uint8Array(await crypto.subtle.digest('SHA-256', outputScript));

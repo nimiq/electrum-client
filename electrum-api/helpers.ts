@@ -1,11 +1,17 @@
-import * as BitcoinJS from 'bitcoinjs-lib';
+import { fromOutputScript as addressFromOutputScript } from 'bitcoinjs-lib/src/address';
+import { Block } from 'bitcoinjs-lib/src/block';
+import { p2pkh, p2sh, p2wpkh, p2wsh, p2ms } from 'bitcoinjs-lib/src/payments';
+import { decompile as scriptDecompile, OPS } from 'bitcoinjs-lib/src/script';
+import { Transaction } from 'bitcoinjs-lib/src/transaction';
+import type { Input as TxInput, Output as TxOutput } from 'bitcoinjs-lib/src/transaction';
+import type { Network } from 'bitcoinjs-lib/src/networks';
 import { Buffer } from 'buffer';
 
 import { PlainTransaction, PlainBlockHeader, PlainInput, PlainOutput } from './types';
 import { bytesToHex, hexToBytes } from '../electrum-ws';
 
-export function blockHeaderToPlain(header: string | BitcoinJS.Block, height: number): PlainBlockHeader {
-    if (typeof header === 'string') header = BitcoinJS.Block.fromHex(header);
+export function blockHeaderToPlain(header: string | Block, height: number): PlainBlockHeader {
+    if (typeof header === 'string') header = Block.fromHex(header);
 
     return {
         blockHash: header.getId(),
@@ -20,11 +26,11 @@ export function blockHeaderToPlain(header: string | BitcoinJS.Block, height: num
     };
 }
 
-export function transactionToPlain(tx: string | BitcoinJS.Transaction, network: BitcoinJS.Network): PlainTransaction {
-    if (typeof tx === 'string') tx = BitcoinJS.Transaction.fromHex(tx);
+export function transactionToPlain(tx: string | Transaction, network: Network): PlainTransaction {
+    if (typeof tx === 'string') tx = Transaction.fromHex(tx);
 
-    const inputs = tx.ins.map((input: BitcoinJS.TxInput, index: number) => inputToPlain(input, index, network));
-    const outputs = tx.outs.map((output: BitcoinJS.TxOutput, index: number) => outputToPlain(output, index, network));
+    const inputs = tx.ins.map((input: TxInput, index: number) => inputToPlain(input, index, network));
+    const outputs = tx.outs.map((output: TxOutput, index: number) => outputToPlain(output, index, network));
 
     const plain: PlainTransaction = {
         transactionHash: tx.getId(),
@@ -42,7 +48,7 @@ export function transactionToPlain(tx: string | BitcoinJS.Transaction, network: 
     return plain;
 }
 
-export function inputToPlain(input: BitcoinJS.TxInput, index: number, network: BitcoinJS.Network): PlainInput {
+export function inputToPlain(input: TxInput, index: number, network: Network): PlainInput {
     let address: string | null = null;
 
     try {
@@ -65,11 +71,11 @@ export function inputToPlain(input: BitcoinJS.TxInput, index: number, network: B
     };
 }
 
-export function outputToPlain(output: BitcoinJS.TxOutput, index: number, network: BitcoinJS.Network): PlainOutput {
+export function outputToPlain(output: TxOutput, index: number, network: Network): PlainOutput {
     let address: string | null = null;
     try {
         // Outputs can be OP_RETURN, which does not translate to an address
-        address = BitcoinJS.address.fromOutputScript(output.script, network);
+        address = addressFromOutputScript(output.script, network);
     } catch (error) {
         // Ignore
     }
@@ -82,16 +88,16 @@ export function outputToPlain(output: BitcoinJS.TxOutput, index: number, network
     };
 }
 
-export function deriveAddressFromInput(input: BitcoinJS.TxInput, network: BitcoinJS.Network): string | undefined {
-    if (BitcoinJS.Transaction.isCoinbaseHash(input.hash)) return undefined;
+export function deriveAddressFromInput(input: TxInput, network: Network): string | undefined {
+    if (Transaction.isCoinbaseHash(input.hash)) return undefined;
 
-    const chunks = (BitcoinJS.script.decompile(input.script) || []) as Buffer[];
+    const chunks = (scriptDecompile(input.script) || []) as Buffer[];
     const witness = input.witness;
 
     // Legacy addresses P2PKH (1...)
     // a4453c9e224a0927f2909e49e3a97b31b5aa74a42d99de8cfcdaf293cb2ecbb7 0,1
     if (chunks.length === 2 && witness.length === 0) {
-        return BitcoinJS.payments.p2pkh({
+        return p2pkh({
             pubkey: chunks[1],
             network,
         }).address;
@@ -100,8 +106,8 @@ export function deriveAddressFromInput(input: BitcoinJS.TxInput, network: Bitcoi
     // Nested SegWit P2SH(P2WPKH) (3...)
     // 6f4e12fa9e869c8721f2d747e042ff80f51c6757277df1563b54d4e9c9454ba0 0,1,2
     if (chunks.length === 1	&& witness.length === 2) {
-        return BitcoinJS.payments.p2sh({
-            redeem: BitcoinJS.payments.p2wpkh({
+        return p2sh({
+            redeem: p2wpkh({
                 pubkey: witness[1],
                 network,
             }),
@@ -111,7 +117,7 @@ export function deriveAddressFromInput(input: BitcoinJS.TxInput, network: Bitcoi
     // Native SegWit P2WPKH (bc1...)
     // 3c89e220db701fed2813e0af033610044bc508d2de50cb4c420b8f3ad2d72c5c 0
     if (chunks.length === 0 && witness.length === 2) {
-        return BitcoinJS.payments.p2wpkh({
+        return p2wpkh({
             pubkey: witness[1],
             network,
         }).address;
@@ -119,7 +125,7 @@ export function deriveAddressFromInput(input: BitcoinJS.TxInput, network: Bitcoi
 
     // Legacy Scripts (3...)
     if (chunks.length > 2 && witness.length === 0) {
-        const redeemScript = BitcoinJS.script.decompile(chunks[chunks.length - 1]);
+        const redeemScript = scriptDecompile(chunks[chunks.length - 1]);
         if (!redeemScript) {
             console.error(new Error('Cannot decode address from input'));
             return undefined;
@@ -127,12 +133,12 @@ export function deriveAddressFromInput(input: BitcoinJS.TxInput, network: Bitcoi
 
         // MultiSig P2SH(P2MS)
         // 80975cddebaa93aa21a6477c0d050685d6820fa1068a2731db0f39b535cbd369 0,1,2
-        if (redeemScript[redeemScript.length - 1] === BitcoinJS.script.OPS.OP_CHECKMULTISIG) {
+        if (redeemScript[redeemScript.length - 1] === OPS.OP_CHECKMULTISIG) {
             const m = chunks.length - 2; // Number of signatures
             const pubkeys = redeemScript.filter(n => typeof n !== 'number') as Buffer[];
 
-            return BitcoinJS.payments.p2sh({
-                redeem: BitcoinJS.payments.p2ms({
+            return p2sh({
+                redeem: p2ms({
                     m,
                     pubkeys,
                     network,
@@ -141,8 +147,8 @@ export function deriveAddressFromInput(input: BitcoinJS.TxInput, network: Bitcoi
         }
 
         // HTLC Redeem P2SH
-        if (redeemScript[0] === BitcoinJS.script.OPS.OP_IF) {
-            return BitcoinJS.payments.p2sh({
+        if (redeemScript[0] === OPS.OP_IF) {
+            return p2sh({
                 redeem: {
                     output: chunks[chunks.length - 1],
                 },
@@ -153,7 +159,7 @@ export function deriveAddressFromInput(input: BitcoinJS.TxInput, network: Bitcoi
 
     // Nested SegWit Scripts (3...)
     if (chunks.length === 1 && witness.length > 2) {
-        const redeemScript = BitcoinJS.script.decompile(witness[witness.length - 1]);
+        const redeemScript = scriptDecompile(witness[witness.length - 1]);
         if (!redeemScript) {
             console.error(new Error('Cannot decode address from input'));
             return undefined;
@@ -161,14 +167,14 @@ export function deriveAddressFromInput(input: BitcoinJS.TxInput, network: Bitcoi
 
         // Nested SegWit MultiSig P2SH(P2WSH(P2MS)) (3...)
         // 80975cddebaa93aa21a6477c0d050685d6820fa1068a2731db0f39b535cbd369 3
-        if (redeemScript[redeemScript.length - 1] === BitcoinJS.script.OPS.OP_CHECKMULTISIG) {
+        if (redeemScript[redeemScript.length - 1] === OPS.OP_CHECKMULTISIG) {
             const m = witness.length - 2; // Number of signatures
-            const pubkeys = BitcoinJS.script.decompile(witness[witness.length - 1])!
+            const pubkeys = scriptDecompile(witness[witness.length - 1])!
                 .filter(n => typeof n !== 'number') as Buffer[];
 
-            return BitcoinJS.payments.p2sh({
-                redeem: BitcoinJS.payments.p2wsh({
-                    redeem: BitcoinJS.payments.p2ms({
+            return p2sh({
+                redeem: p2wsh({
+                    redeem: p2ms({
                         m,
                         pubkeys,
                         network,
@@ -180,9 +186,9 @@ export function deriveAddressFromInput(input: BitcoinJS.TxInput, network: Bitcoi
         // Nested SegWit "something" P2SH(P2WSH(P2PKH))
         // 9dc53a675b2ad8eea203913b2d8041bb3e961975fde40dae870fa1aac29f8d73 0,1,2,3,4,5
         if (witness.length === 3 && redeemScript.filter(n => typeof n !== 'number').length === 1) {
-            return BitcoinJS.payments.p2sh({
-                redeem: BitcoinJS.payments.p2wsh({
-                    redeem: BitcoinJS.payments.p2pkh({
+            return p2sh({
+                redeem: p2wsh({
+                    redeem: p2pkh({
                         pubkey: witness[1],
                         network,
                     }),
@@ -193,7 +199,7 @@ export function deriveAddressFromInput(input: BitcoinJS.TxInput, network: Bitcoi
 
     // Native SegWit Scripts (bc1...)
     if (chunks.length === 0 && witness.length > 2) {
-        const redeemScript = BitcoinJS.script.decompile(witness[witness.length - 1]);
+        const redeemScript = scriptDecompile(witness[witness.length - 1]);
         if (!redeemScript) {
             console.error(new Error('Cannot decode address from input'));
             return undefined;
@@ -201,12 +207,12 @@ export function deriveAddressFromInput(input: BitcoinJS.TxInput, network: Bitcoi
 
         // MultiSig P2WSH(P2MS)
         // 54a3e33efff4c508fa5c8ce7ccf4b08538a8fd2bf808b97ae51c21cf83df2dd1 0
-        if (redeemScript[redeemScript.length - 1] === BitcoinJS.script.OPS.OP_CHECKMULTISIG) {
+        if (redeemScript[redeemScript.length - 1] === OPS.OP_CHECKMULTISIG) {
             const m = witness.length - 2; // Number of signatures
             const pubkeys = redeemScript.filter(n => typeof n !== 'number') as Buffer[];
 
-            return BitcoinJS.payments.p2wsh({
-                redeem: BitcoinJS.payments.p2ms({
+            return p2wsh({
+                redeem: p2ms({
                     m,
                     pubkeys,
                     network,
@@ -216,8 +222,8 @@ export function deriveAddressFromInput(input: BitcoinJS.TxInput, network: Bitcoi
 
         // HTLC Redeem P2WSH
         // 5800c704f139e388d4146be7110294470c8c17b34488544863a535d2346a4637 0
-        if (redeemScript[0] === BitcoinJS.script.OPS.OP_IF) {
-            return BitcoinJS.payments.p2wsh({
+        if (redeemScript[0] === OPS.OP_IF) {
+            return p2wsh({
                 witness,
                 network,
             }).address
@@ -228,8 +234,8 @@ export function deriveAddressFromInput(input: BitcoinJS.TxInput, network: Bitcoi
     return undefined;
 }
 
-export function transactionFromPlain(plain: PlainTransaction): BitcoinJS.Transaction {
-    const tx = new BitcoinJS.Transaction();
+export function transactionFromPlain(plain: PlainTransaction): Transaction {
+    const tx = new Transaction();
     tx.version = plain.version;
     tx.locktime = plain.locktime;
     tx.ins = plain.inputs.sort((a, b) => a.index - b.index).map(input => inputFromPlain(input));
@@ -237,7 +243,7 @@ export function transactionFromPlain(plain: PlainTransaction): BitcoinJS.Transac
     return tx;
 }
 
-export function inputFromPlain(plain: PlainInput): BitcoinJS.TxInput {
+export function inputFromPlain(plain: PlainInput): TxInput {
     return {
         hash: Buffer.from(hexToBytes(plain.transactionHash).reverse()),
         index: plain.outputIndex,
@@ -247,7 +253,7 @@ export function inputFromPlain(plain: PlainInput): BitcoinJS.TxInput {
     };
 }
 
-export function outputFromPlain(plain: PlainOutput): BitcoinJS.TxOutput {
+export function outputFromPlain(plain: PlainOutput): TxOutput {
     return {
         script: Buffer.from(hexToBytes(plain.script)),
         value: plain.value,

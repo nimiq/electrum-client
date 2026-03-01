@@ -1,26 +1,28 @@
 {
   "name": "svelte-app",
   "version": "1.0.0",
+  "type": "module",
   "scripts": {
     "build": "rollup -c",
-    "build:bitcoinjs": "browserify -p tinyify ../bitcoinjs-parts.js -s BitcoinJS > public/bitcoinjs.min.js",
     "dev": "rollup -c -w",
     "start": "sirv public"
   },
   "devDependencies": {
-    "@rollup/plugin-commonjs": "^12.0.0",
-    "@rollup/plugin-json": "^4.1.0",
-    "@rollup/plugin-node-resolve": "^8.0.0",
-    "browserify": "^16.5.1",
-    "rollup": "^2.3.4",
-    "rollup-plugin-livereload": "^1.0.0",
+    "@rollup/plugin-alias": "^5.0.0",
+    "@rollup/plugin-commonjs": "^25.0.7",
+    "@rollup/plugin-inject": "^5.0.5",
+    "@rollup/plugin-json": "^6.0.1",
+    "@rollup/plugin-node-resolve": "^15.2.3",
+    "@rollup/plugin-virtual": "^3.0.2",
+    "bitcoinjs-lib": "^5.1.10",
+    "buffer": "^6.0.3",
+    "readable-stream": "^4.7.0",
+    "rollup": "^4.5.1",
+    "rollup-plugin-livereload": "^2.0.5",
     "rollup-plugin-svelte": "^5.0.3",
     "rollup-plugin-terser": "^5.1.2",
+    "sirv-cli": "^1.0.0",
     "svelte": "^3.0.0",
-    "tinyify": "^3.0.0",
     "yarn-or-npm": "^3.0.1"
-  },
-  "dependencies": {
-    "sirv-cli": "^1.0.0"
   }
 }
