@@ -1,9 +1,13 @@
-import * as BitcoinJS from 'bitcoinjs-lib';
+import { fromOutputScript as addressFromOutputScript } from 'bitcoinjs-lib/src/address';
+import { Block } from 'bitcoinjs-lib/src/block';
+import { p2pkh, p2sh, p2wpkh, p2wsh, p2ms } from 'bitcoinjs-lib/src/payments';
+import { decompile as scriptDecompile, OPS } from 'bitcoinjs-lib/src/script';
+import { Transaction } from 'bitcoinjs-lib/src/transaction';
 import { Buffer } from 'buffer';
 import { bytesToHex, hexToBytes } from '../electrum-ws';
 export function blockHeaderToPlain(header, height) {
     if (typeof header === 'string')
-        header = BitcoinJS.Block.fromHex(header);
+        header = Block.fromHex(header);
     return {
         blockHash: header.getId(),
         blockHeight: height,
@@ -18,7 +22,7 @@ export function blockHeaderToPlain(header, height) {
 }
 export function transactionToPlain(tx, network) {
     if (typeof tx === 'string')
-        tx = BitcoinJS.Transaction.fromHex(tx);
+        tx = Transaction.fromHex(tx);
     const inputs = tx.ins.map((input, index) => inputToPlain(input, index, network));
     const outputs = tx.outs.map((output, index) => outputToPlain(output, index, network));
     const plain = {
@@ -60,7 +64,7 @@ export function inputToPlain(input, index, network) {
 export function outputToPlain(output, index, network) {
     let address = null;
     try {
-        address = BitcoinJS.address.fromOutputScript(output.script, network);
+        address = addressFromOutputScript(output.script, network);
     }
     catch (error) {
     }
@@ -72,49 +76,49 @@ export function outputToPlain(output, index, network) {
     };
 }
 export function deriveAddressFromInput(input, network) {
-    if (BitcoinJS.Transaction.isCoinbaseHash(input.hash))
+    if (Transaction.isCoinbaseHash(input.hash))
         return undefined;
-    const chunks = (BitcoinJS.script.decompile(input.script) || []);
+    const chunks = (scriptDecompile(input.script) || []);
     const witness = input.witness;
     if (chunks.length === 2 && witness.length === 0) {
-        return BitcoinJS.payments.p2pkh({
+        return p2pkh({
             pubkey: chunks[1],
             network,
         }).address;
     }
     if (chunks.length === 1 && witness.length === 2) {
-        return BitcoinJS.payments.p2sh({
-            redeem: BitcoinJS.payments.p2wpkh({
+        return p2sh({
+            redeem: p2wpkh({
                 pubkey: witness[1],
                 network,
             }),
         }).address;
     }
     if (chunks.length === 0 && witness.length === 2) {
-        return BitcoinJS.payments.p2wpkh({
+        return p2wpkh({
             pubkey: witness[1],
             network,
         }).address;
     }
     if (chunks.length > 2 && witness.length === 0) {
-        const redeemScript = BitcoinJS.script.decompile(chunks[chunks.length - 1]);
+        const redeemScript = scriptDecompile(chunks[chunks.length - 1]);
         if (!redeemScript) {
             console.error(new Error('Cannot decode address from input'));
             return undefined;
         }
-        if (redeemScript[redeemScript.length - 1] === BitcoinJS.script.OPS.OP_CHECKMULTISIG) {
+        if (redeemScript[redeemScript.length - 1] === OPS.OP_CHECKMULTISIG) {
             const m = chunks.length - 2;
             const pubkeys = redeemScript.filter(n => typeof n !== 'number');
-            return BitcoinJS.payments.p2sh({
-                redeem: BitcoinJS.payments.p2ms({
+            return p2sh({
+                redeem: p2ms({
                     m,
                     pubkeys,
                     network,
                 }),
             }).address;
         }
-        if (redeemScript[0] === BitcoinJS.script.OPS.OP_IF) {
-            return BitcoinJS.payments.p2sh({
+        if (redeemScript[0] === OPS.OP_IF) {
+            return p2sh({
                 redeem: {
                     output: chunks[chunks.length - 1],
                 },
@@ -123,18 +127,18 @@ export function deriveAddressFromInput(input, network) {
         }
     }
     if (chunks.length === 1 && witness.length > 2) {
-        const redeemScript = BitcoinJS.script.decompile(witness[witness.length - 1]);
+        const redeemScript = scriptDecompile(witness[witness.length - 1]);
         if (!redeemScript) {
             console.error(new Error('Cannot decode address from input'));
             return undefined;
         }
-        if (redeemScript[redeemScript.length - 1] === BitcoinJS.script.OPS.OP_CHECKMULTISIG) {
+        if (redeemScript[redeemScript.length - 1] === OPS.OP_CHECKMULTISIG) {
             const m = witness.length - 2;
-            const pubkeys = BitcoinJS.script.decompile(witness[witness.length - 1])
+            const pubkeys = scriptDecompile(witness[witness.length - 1])
                 .filter(n => typeof n !== 'number');
-            return BitcoinJS.payments.p2sh({
-                redeem: BitcoinJS.payments.p2wsh({
-                    redeem: BitcoinJS.payments.p2ms({
+            return p2sh({
+                redeem: p2wsh({
+                    redeem: p2ms({
                         m,
                         pubkeys,
                         network,
@@ -143,9 +147,9 @@ export function deriveAddressFromInput(input, network) {
             }).address;
         }
         if (witness.length === 3 && redeemScript.filter(n => typeof n !== 'number').length === 1) {
-            return BitcoinJS.payments.p2sh({
-                redeem: BitcoinJS.payments.p2wsh({
-                    redeem: BitcoinJS.payments.p2pkh({
+            return p2sh({
+                redeem: p2wsh({
+                    redeem: p2pkh({
                         pubkey: witness[1],
                         network,
                     }),
@@ -154,24 +158,24 @@ export function deriveAddressFromInput(input, network) {
         }
     }
     if (chunks.length === 0 && witness.length > 2) {
-        const redeemScript = BitcoinJS.script.decompile(witness[witness.length - 1]);
+        const redeemScript = scriptDecompile(witness[witness.length - 1]);
         if (!redeemScript) {
             console.error(new Error('Cannot decode address from input'));
             return undefined;
         }
-        if (redeemScript[redeemScript.length - 1] === BitcoinJS.script.OPS.OP_CHECKMULTISIG) {
+        if (redeemScript[redeemScript.length - 1] === OPS.OP_CHECKMULTISIG) {
             const m = witness.length - 2;
             const pubkeys = redeemScript.filter(n => typeof n !== 'number');
-            return BitcoinJS.payments.p2wsh({
-                redeem: BitcoinJS.payments.p2ms({
+            return p2wsh({
+                redeem: p2ms({
                     m,
                     pubkeys,
                     network,
                 }),
             }).address;
         }
-        if (redeemScript[0] === BitcoinJS.script.OPS.OP_IF) {
-            return BitcoinJS.payments.p2wsh({
+        if (redeemScript[0] === OPS.OP_IF) {
+            return p2wsh({
                 witness,
                 network,
             }).address;
@@ -181,7 +185,7 @@ export function deriveAddressFromInput(input, network) {
     return undefined;
 }
 export function transactionFromPlain(plain) {
-    const tx = new BitcoinJS.Transaction();
+    const tx = new Transaction();
     tx.version = plain.version;
     tx.locktime = plain.locktime;
     tx.ins = plain.inputs.sort((a, b) => a.index - b.index).map(input => inputFromPlain(input));

@@ -1,8 +1,8 @@
-import * as BitcoinJS from 'bitcoinjs-lib';
+import type { Network } from 'bitcoinjs-lib/src/networks';
 import { Balance, PlainBlockHeader, PlainTransaction, Receipt, PeerFeatures, Peer } from './types';
 export declare type ElectrumApiOptions = {
     endpoint?: string;
-    network: BitcoinJS.Network;
+    network: Network;
     proxy?: boolean;
     token?: string;
     reconnect?: boolean;
@@ -11,7 +11,7 @@ export declare class ElectrumApi {
     private options;
     private socket;
     constructor(options?: Omit<ElectrumApiOptions, 'network'> & {
-        network?: 'bitcoin' | 'testnet' | BitcoinJS.Network;
+        network?: 'bitcoin' | 'testnet' | Network;
     });
     waitForConnectionEstablished(): Promise<unknown>;
     getBalance(address: string): Promise<Balance>;

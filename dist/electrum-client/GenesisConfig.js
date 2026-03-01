@@ -1,4 +1,4 @@
-import * as BitcoinJS from 'bitcoinjs-lib';
+import { Block } from 'bitcoinjs-lib/src/block';
 export var Network;
 (function (Network) {
     Network["MAIN"] = "bitcoin";
@@ -36,7 +36,7 @@ export class GenesisConfig {
         if (!GenesisConfig._config)
             throw new Error('GenesisConfig not initialized');
         if (!GenesisConfig._config.GENESIS_HASH) {
-            GenesisConfig._config.GENESIS_HASH = BitcoinJS.Block.fromHex(GenesisConfig._config.GENESIS_HEADER).getId();
+            GenesisConfig._config.GENESIS_HASH = Block.fromHex(GenesisConfig._config.GENESIS_HEADER).getId();
         }
         return GenesisConfig._config.GENESIS_HASH;
     }

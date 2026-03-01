@@ -1,17 +1,18 @@
-import * as BitcoinJS from 'bitcoinjs-lib';
+import { toOutputScript as addressToOutputScript } from 'bitcoinjs-lib/src/address';
+import * as networks from 'bitcoinjs-lib/src/networks';
 import { ElectrumWS, ElectrumWSEvent, bytesToHex, hexToBytes, } from '../electrum-ws/index';
 import { transactionToPlain, blockHeaderToPlain, } from './helpers';
 export class ElectrumApi {
     constructor(options = {}) {
         if (typeof options.network === 'string') {
-            if (!(options.network in BitcoinJS.networks)) {
+            if (!(options.network in networks)) {
                 throw new Error('Invalid network name');
             }
-            options.network = BitcoinJS.networks[options.network];
+            options.network = networks[options.network];
         }
         this.options = {
             ...options,
-            network: options.network || BitcoinJS.networks.bitcoin,
+            network: options.network || networks.bitcoin,
         };
         const wsOptions = {};
         if ('proxy' in this.options)
@@ -145,8 +146,8 @@ export class ElectrumApi {
                     case 't':
                         {
                             if (meta.substring(1).length === 0) {
-                                switch (this.options.network || BitcoinJS.networks.bitcoin) {
-                                    case BitcoinJS.networks.testnet:
+                                switch (this.options.network || networks.bitcoin) {
+                                    case networks.testnet:
                                         tcp = 60001;
                                         break;
                                     default:
@@ -162,8 +163,8 @@ export class ElectrumApi {
                     case 's':
                         {
                             if (meta.substring(1).length === 0) {
-                                switch (this.options.network || BitcoinJS.networks.bitcoin) {
-                                    case BitcoinJS.networks.testnet:
+                                switch (this.options.network || networks.bitcoin) {
+                                    case networks.testnet:
                                         ssl = 60002;
                                         break;
                                     default:
@@ -179,8 +180,8 @@ export class ElectrumApi {
                     case 'w':
                         {
                             if (meta.substring(1).length === 0) {
-                                switch (this.options.network || BitcoinJS.networks.bitcoin) {
-                                    case BitcoinJS.networks.testnet:
+                                switch (this.options.network || networks.bitcoin) {
+                                    case networks.testnet:
                                         wss = 60004;
                                         break;
                                     default:
@@ -215,7 +216,7 @@ export class ElectrumApi {
         return this.socket.close(reason);
     }
     async addressToScriptHash(addr) {
-        const outputScript = BitcoinJS.address.toOutputScript(addr, this.options.network);
+        const outputScript = addressToOutputScript(addr, this.options.network);
         const hash = new Uint8Array(await crypto.subtle.digest('SHA-256', outputScript));
         return bytesToHex(hash.reverse());
     }
