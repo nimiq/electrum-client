@@ -6,6 +6,7 @@
   "module": "dist/index.js",
   "types": "dist/index.d.ts",
   "license": "Apache-2.0",
+  "files": ["dist", "bitcoinjs-lib.d.ts"],
   "scripts": {
     "test": "jest",
     "build": "tsc"

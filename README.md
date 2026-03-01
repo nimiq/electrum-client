@@ -13,22 +13,76 @@ npm install @nimiq/electrum-client@https://github.com/nimiq/electrum-client#buil
 yarn add @nimiq/electrum-client@https://github.com/nimiq/electrum-client#build
 ```
 
-### BitcoinJS Library
+## Providing bitcoinjs-lib
 
-`ElectrumApi` depends on [bitcoinjs-lib](https://github.com/bitcoinjs/bitcoinjs-lib),
-which is only natively available for NodeJS. To use it in browsers, you need to
-create a build with Browserify and include it as a `<script>` in your app HTML:
+@nimiq/electrum-client depends on [bitcoinjs-lib](https://github.com/bitcoinjs/bitcoinjs-lib)
+which makes use of built-in modules and globals native to NodeJS. For use in browsers, they must
+be polyfilled as part of the build process.
+
+Note that @nimiq/electrum-client does not include these polyfills as it does not even bundle
+`bitcoinjs-lib`. This is to avoid duplicate bundling of `bitcoinjs-lib` and the polyfills,
+if your app itself bundles `bitcoinjs-lib` or the polyfills, too. This way, also no polyfills
+are unnecessarily included if using the library in NodeJs instead of a browser, and specific
+polyfills can be picked by the app author.
+
+Example instructions for bundling the polyfills with various bundlers follow in the next sections,
+roughly sorted from easiest to set up but least preferable to harder to set up but preferable.
+
+### browserify
+
+[browserify](https://github.com/browserify/browserify) supports bundling apps with polyfills.
+You can either use it to bundle your entire app, or to bundle just the @nimiq/electrum-client
+as a standalone file. The following example bundles the lib to a standalone file:
 
 ```bash
-browserify -r bitcoinjs-lib -s BitcoinJS | terser --compress --mangle > public/bitcoinjs.min.js
+browserify -r @nimiq/electrum-client -s ElectrumClient | terser --compress --mangle > electrum-client.min.js
 ```
 
-You also need to mark the `bitcoinjs-lib` package as _external_ in your bundler to prevent
-it from blowing up your app:
+Note that bundling to a separate file can lead to duplicate bundling of `bitcoinjs-lib` and
+the polyfills between the standalone file and the rest of your app. Therefore, using a different
+bundler is recommended.
 
-- [Rollup](https://rollupjs.org/guide/en/#warning-treating-module-as-external-dependency)
-  ([example config](example/rollup.config.js#L37-L43))
-- [Webpack](https://webpack.js.org/configuration/externals/#externals)
+### rollup with plugin `rollup-plugin-polyfill-node`
+
+The [rollup](https://rollupjs.org/) plugin
+[`rollup-plugin-polyfill-node`](https://github.com/FredKSchott/rollup-plugin-polyfill-node)
+can be used to automatically handle polyfills of NodeJS features. An example configuration can be found
+[here](https://github.com/nimiq/ledger-api/blob/639d7dc35c1cd121d48a9bc7a6ec814939881147/rollup.config.js).
+
+Note that `rollup-plugin-polyfill-node` has not been updated much recently, and provided polyfills might
+not be the most up-to-date. You might want to look for a more modern fork or manually provide the polyfills
+yourself.
+
+### Manually providing polyfills
+
+Manually providing polyfills comes with a bit of extra setup but allows you to specify the polyfills yourself,
+with the ability to keep them up-to-date manually.
+
+Notable built-in NodeJS features used by bitcoinjs-lib and suggested polyfills are:
+- NodeJS module `buffer` can be polyfilled by npm package
+  [`buffer`](https://www.npmjs.com/package/buffer).
+- NodeJS module `stream` can be polyfilled by npm package
+  [`readable-stream`](https://www.npmjs.com/package/readable-stream).
+- NodeJS global variable `global` can be polyfilled as
+  [`globalThis`](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/globalThis).
+- NodeJS global variable `Buffer` can be polyfilled by automatically injecting `import { Buffer } from 'buffer'`
+  wherever `Buffer` is used, as part of your build task.
+
+Basically, npm packages `buffer` and `readable-stream` need to be added as dependencies, `stream` has to be aliased as
+`readable-stream`, imports of `buffer` should be injected whenever `Buffer` is used, and `global` should be replaced
+with `globalThis`.
+
+For an example setup with [rollup](https://rollupjs.org/) check out the
+[rollup.config.js of @nimiq/electrum-client's example app](https://github.com/nimiq/electrum-client/blob/master/example/rollup.config.js).
+
+For an example setup with [webpack](https://webpack.js.org/) checkout out the
+[vue.config.js of the Nimiq Hub](https://github.com/nimiq/hub/blob/master/vue.config.js).
+
+## Use bitcoinjs-lib^7.0.0
+
+Starting with bitcoinjs-lib version 7.0, the library depends less on NodeJS features, and for example replaces `buffer`s
+with plain `Uint8Array`s. You might be able to use bitcoinjs-lib starting with version 7.0 without any polyfills, but
+we have not tested that yet.
 
 ## Quick Start
 
@@ -83,11 +137,11 @@ const electrum = new ElectrumApi({
 
     /**
      * Which Bitcoin network to use to encode and decode addresses.
-     * Can be either a BitcoinJS.Network object or either of
+     * Can be either a import('bitcoinjs-lib').Network object or either of
      * 'bitcoin' | 'testnet'.
      *
      * [optional]
-     * Default: BitcoinJS.network.bitcoin
+     * Default: (await import('bitcoinjs-lib')).networks.bitcoin
      */
     network: 'bitcoin',
 });

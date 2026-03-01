@@ -32,26 +32,7 @@ yarn dev
 Navigate to [localhost:5000](http://localhost:5000). You should see the app running
 and displaying the latest Bitcoin block height and how long ago it was mined.
 
-## Providing the BitcoinJS library
+# Providing bitcoinjs-lib
 
-The [bitcoinjs-lib](https://github.com/bitcoinjs/bitcoinjs-lib) project is made
-for usage in NodeJS. To be used in browsers, it must be built with polyfills via
-Browerify:
-
-```bash
-browserify -r bitcoinjs-lib -s BitcoinJS | terser --compress --mangle > public/bitcoinjs.min.js
-```
-
-This is done automatically for you in this example app when running the `dev` or
-`build` scripts. The resulting `public/bitcoinjs.min.js` file is referenced as a
-global script in `public/index.html`. The `bitcoinjs-lib` package import in the
-ElectrumApi library is in turn declared as _external_ in this app's
-[Rollup config](rollup.config.js#L37-L43), so that it is not included in the bundle.
-
-> I also tried to include the `bitcoinjs-lib` dependency directly via Rollup and
-> polyfill its NodeJS dependencies via the
-> [`rollup-plugin-node-polyfills`](https://github.com/ionic-team/rollup-plugin-node-polyfills)
-> plugin, but it was not able to correctly detect and polyfill all required NodeJS
-> globals and work well together with Rollup's CommonJS plugin.
->
-> If anybody wants to experiment futher in this direction, feel free to reach out!
+The build dependencies of bitcoinjs-lib are provided as specified in the
+[readme of @nimiq/electrum-client](https://github.com/nimiq/electrum-client).
