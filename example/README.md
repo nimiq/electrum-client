@@ -1,7 +1,7 @@
 # Electrum API for Browsers: Example App
 
-This example is a [Svelte](https://svelte.dev) app created from
-[this template](https://github.com/sveltejs/template).
+This example is a [Svelte](https://svelte.dev) app built with [Vite](https://vite.dev), set up like
+`npm create vite` with the `svelte` option.
 
 ## Get running
 
@@ -29,10 +29,5 @@ npm run dev
 yarn dev
 ```
 
-Navigate to [localhost:5000](http://localhost:5000). You should see the app running
+Navigate to [localhost:5173](http://localhost:5173). You should see the app running
 and displaying the latest Bitcoin block height and how long ago it was mined.
-
-# Providing bitcoinjs-lib
-
-The build dependencies of bitcoinjs-lib are provided as specified in the
-[readme of @nimiq/electrum-client](https://github.com/nimiq/electrum-client).
