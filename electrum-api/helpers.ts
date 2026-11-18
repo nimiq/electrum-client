@@ -1,11 +1,10 @@
 import { fromOutputScript as addressFromOutputScript } from 'bitcoinjs-lib/src/address';
 import { Block } from 'bitcoinjs-lib/src/block';
-import { p2pkh, p2sh, p2wpkh, p2wsh, p2ms } from 'bitcoinjs-lib/src/payments';
+import { p2pkh, p2sh, p2wpkh, p2wsh, p2ms } from 'bitcoinjs-lib/src/payments/index';
 import { decompile as scriptDecompile, OPS } from 'bitcoinjs-lib/src/script';
 import { Transaction } from 'bitcoinjs-lib/src/transaction';
 import type { Input as TxInput, Output as TxOutput } from 'bitcoinjs-lib/src/transaction';
 import type { Network } from 'bitcoinjs-lib/src/networks';
-import { Buffer } from 'buffer';
 
 import { PlainTransaction, PlainBlockHeader, PlainInput, PlainOutput } from './types';
 import { bytesToHex, hexToBytes } from '../electrum-ws';
@@ -83,7 +82,8 @@ export function outputToPlain(output: TxOutput, index: number, network: Network)
     return {
         script: bytesToHex(output.script),
         address,
-        value: output.value,
+        // bitcoinjs-lib 7 uses bigints for values. Plain transactions keep using numbers, which are exact up to 2^53 sats.
+        value: Number(output.value),
         index,
     };
 }
@@ -91,7 +91,7 @@ export function outputToPlain(output: TxOutput, index: number, network: Network)
 export function deriveAddressFromInput(input: TxInput, network: Network): string | undefined {
     if (Transaction.isCoinbaseHash(input.hash)) return undefined;
 
-    const chunks = (scriptDecompile(input.script) || []) as Buffer[];
+    const chunks = (scriptDecompile(input.script) || []) as Uint8Array[];
     const witness = input.witness;
 
     // Legacy addresses P2PKH (1...)
@@ -135,7 +135,7 @@ export function deriveAddressFromInput(input: TxInput, network: Network): string
         // 80975cddebaa93aa21a6477c0d050685d6820fa1068a2731db0f39b535cbd369 0,1,2
         if (redeemScript[redeemScript.length - 1] === OPS.OP_CHECKMULTISIG) {
             const m = chunks.length - 2; // Number of signatures
-            const pubkeys = redeemScript.filter(n => typeof n !== 'number') as Buffer[];
+            const pubkeys = redeemScript.filter(n => typeof n !== 'number') as Uint8Array[];
 
             return p2sh({
                 redeem: p2ms({
@@ -170,7 +170,7 @@ export function deriveAddressFromInput(input: TxInput, network: Network): string
         if (redeemScript[redeemScript.length - 1] === OPS.OP_CHECKMULTISIG) {
             const m = witness.length - 2; // Number of signatures
             const pubkeys = scriptDecompile(witness[witness.length - 1])!
-                .filter(n => typeof n !== 'number') as Buffer[];
+                .filter(n => typeof n !== 'number') as Uint8Array[];
 
             return p2sh({
                 redeem: p2wsh({
@@ -209,7 +209,7 @@ export function deriveAddressFromInput(input: TxInput, network: Network): string
         // 54a3e33efff4c508fa5c8ce7ccf4b08538a8fd2bf808b97ae51c21cf83df2dd1 0
         if (redeemScript[redeemScript.length - 1] === OPS.OP_CHECKMULTISIG) {
             const m = witness.length - 2; // Number of signatures
-            const pubkeys = redeemScript.filter(n => typeof n !== 'number') as Buffer[];
+            const pubkeys = redeemScript.filter(n => typeof n !== 'number') as Uint8Array[];
 
             return p2wsh({
                 redeem: p2ms({
@@ -245,17 +245,17 @@ export function transactionFromPlain(plain: PlainTransaction): Transaction {
 
 export function inputFromPlain(plain: PlainInput): TxInput {
     return {
-        hash: Buffer.from(hexToBytes(plain.transactionHash).reverse()),
+        hash: hexToBytes(plain.transactionHash).reverse(),
         index: plain.outputIndex,
-        script: Buffer.from(hexToBytes(plain.script)),
+        script: hexToBytes(plain.script),
         sequence: plain.sequence,
-        witness: plain.witness.map(scriptOrNumber => typeof scriptOrNumber === 'string' ? Buffer.from(hexToBytes(scriptOrNumber)) : scriptOrNumber as any as Buffer),
+        witness: plain.witness.map(scriptOrNumber => typeof scriptOrNumber === 'string' ? hexToBytes(scriptOrNumber) : scriptOrNumber as unknown as Uint8Array),
     };
 }
 
 export function outputFromPlain(plain: PlainOutput): TxOutput {
     return {
-        script: Buffer.from(hexToBytes(plain.script)),
-        value: plain.value,
+        script: hexToBytes(plain.script),
+        value: BigInt(plain.value),
     };
 }

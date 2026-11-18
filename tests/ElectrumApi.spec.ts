@@ -1,5 +1,4 @@
-/// <reference path="../bitcoinjs-lib.d.ts" />
-
+import { describe, it, expect } from 'vitest';
 import * as networks from 'bitcoinjs-lib/src/networks';
 import { Transaction } from 'bitcoinjs-lib/src/transaction';
 import { transactionToPlain, transactionFromPlain, deriveAddressFromInput } from '../electrum-api';
@@ -83,6 +82,16 @@ describe('ElectrumApi', () => {
 
             expect(revived.getId()).toEqual(tx.getId());
         }
+    });
+
+    it('uses numbers for output values in plain transactions, and bigints in bitcoinjs-lib transactions', () => {
+        const tx = Transaction.fromHex(VECTORS[0].raw);
+
+        const plain = transactionToPlain(tx, networks.bitcoin);
+        expect(plain.outputs[0].value).toBe(35009472);
+
+        const revived = transactionFromPlain(plain);
+        expect(revived.outs[0].value).toBe(35009472n);
     });
 
     it('can decode input addresses', () => {
