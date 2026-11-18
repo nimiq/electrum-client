@@ -281,7 +281,8 @@ export class ElectrumApi {
         const outputScript = addressToOutputScript(addr, this.options.network);
 
         // Hash with SHA256
-        const hash = new Uint8Array(await crypto.subtle.digest('SHA-256', outputScript));
+        // bitcoinjs-lib types its bytes with any underlying buffer, but they are backed by a regular ArrayBuffer.
+        const hash = new Uint8Array(await crypto.subtle.digest('SHA-256', outputScript as Uint8Array<ArrayBuffer>));
 
         // Convert reversed into HEX
         return bytesToHex(hash.reverse());
