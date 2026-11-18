@@ -3,7 +3,7 @@ export declare enum Network {
     MAIN = "bitcoin",
     TEST = "testnet"
 }
-declare type GenesisConfigConfig = {
+type GenesisConfigConfig = {
     NETWORK_NAME: Network;
     SEED_PEERS: Peer[];
     SEED_LISTS: unknown[];

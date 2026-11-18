@@ -25,12 +25,10 @@ export class ElectrumClient {
         this.connect();
     }
     getHeadHash() {
-        var _a;
-        return (_a = this.head) === null || _a === void 0 ? void 0 : _a.blockHash;
+        return this.head?.blockHash;
     }
     getHeadHeight() {
-        var _a;
-        return (_a = this.head) === null || _a === void 0 ? void 0 : _a.blockHeight;
+        return this.head?.blockHeight;
     }
     getHeadBlock() {
         return this.head || undefined;
@@ -159,7 +157,6 @@ export class ElectrumClient {
         return txs;
     }
     async sendTransaction(serializedTx) {
-        var _a, _b;
         let tx;
         let sendError;
         for (const agent of this.agents) {
@@ -175,7 +172,8 @@ export class ElectrumClient {
             throw (sendError || new Error('Could not send transaction'));
         }
         if (tx.onChain) {
-            const address = ((_a = tx.inputs.find(input => input.address)) === null || _a === void 0 ? void 0 : _a.address) || ((_b = tx.outputs.find(output => output.address)) === null || _b === void 0 ? void 0 : _b.address);
+            const address = tx.inputs.find(input => input.address)?.address
+                || tx.outputs.find(output => output.address)?.address;
             const receipts = await this.getTransactionReceiptsByAddress(address);
             const blockHeight = receipts.find(receipt => receipt.transactionHash === tx.transactionHash).blockHeight;
             const block = await this.getBlockAt(blockHeight);

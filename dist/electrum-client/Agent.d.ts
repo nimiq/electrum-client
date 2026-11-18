@@ -8,7 +8,7 @@ export declare enum Event {
     SYNCED = "synced",
     CLOSE = "close"
 }
-export declare type ElectrumAgentOptions = {
+export type ElectrumAgentOptions = {
     tcpProxyUrl: string | false;
     sslProxyUrl: string | false;
 };
@@ -25,7 +25,7 @@ export declare class Agent extends Observable {
     private pingInterval;
     constructor(peer: Peer, options?: Partial<ElectrumAgentOptions>);
     sync(): Promise<boolean | undefined>;
-    getBalance(address: string): Promise<import("../electrum-api/types").Balance>;
+    getBalance(address: string): Promise<import("..").Balance>;
     getTransactionReceipts(address: string): Promise<Receipt[]>;
     getTransaction(hash: string, block?: PlainBlockHeader): Promise<PlainTransaction>;
     getBlockHeader(height: number): Promise<PlainBlockHeader>;

@@ -1,13 +1,13 @@
-export declare type Balance = {
+export type Balance = {
     confirmed: number;
     unconfirmed: number;
 };
-export declare type Receipt = {
+export type Receipt = {
     blockHeight: number;
     transactionHash: string;
     fee?: number;
 };
-export declare type PlainInput = {
+export type PlainInput = {
     script: string;
     transactionHash: string;
     address: string | null;
@@ -16,13 +16,13 @@ export declare type PlainInput = {
     outputIndex: number;
     sequence: number;
 };
-export declare type PlainOutput = {
+export type PlainOutput = {
     script: string;
     address: string | null;
     value: number;
     index: number;
 };
-export declare type PlainTransaction = {
+export type PlainTransaction = {
     transactionHash: string;
     inputs: PlainInput[];
     outputs: PlainOutput[];
@@ -34,7 +34,7 @@ export declare type PlainTransaction = {
     replaceByFee: boolean;
     onChain?: boolean;
 };
-export declare type PlainBlockHeader = {
+export type PlainBlockHeader = {
     blockHash: string;
     blockHeight: number;
     timestamp: number;
@@ -45,7 +45,7 @@ export declare type PlainBlockHeader = {
     prevHash: string | null;
     merkleRoot: string | null;
 };
-export declare type PeerFeatures = {
+export type PeerFeatures = {
     hosts: {
         [hostname: string]: {
             tcp_port: number | null;
@@ -65,7 +65,7 @@ export declare enum Transport {
     SSL = 2,
     WSS = 3
 }
-export declare type Peer = {
+export type Peer = {
     ip: string;
     host: string;
     wssPath?: string;

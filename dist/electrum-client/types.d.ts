@@ -11,14 +11,14 @@ export declare enum TransactionState {
     INVALIDATED = "invalidated",
     CONFIRMED = "confirmed"
 }
-export declare type TransactionDetails = PlainTransaction & {
+export type TransactionDetails = PlainTransaction & {
     state: TransactionState;
     blockHash?: string;
     blockHeight?: number;
     timestamp?: number;
     confirmations: number;
 };
-export declare type Handle = number;
-export declare type ConsensusChangedListener = (consensusState: ConsensusState) => any;
-export declare type HeadChangedListener = (block: PlainBlockHeader, reason: string, revertedBlocks: string[], adoptedBlocks: string[]) => any;
-export declare type TransactionListener = (transaction: TransactionDetails) => any;
+export type Handle = number;
+export type ConsensusChangedListener = (consensusState: ConsensusState) => any;
+export type HeadChangedListener = (block: PlainBlockHeader, reason: string, revertedBlocks: string[], adoptedBlocks: string[]) => any;
+export type TransactionListener = (transaction: TransactionDetails) => any;

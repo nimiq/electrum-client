@@ -1,6 +1,6 @@
 import { Peer, PlainTransaction, PlainBlockHeader, Balance, Receipt } from '../electrum-api/types';
 import { Handle, ConsensusChangedListener, HeadChangedListener, TransactionListener, TransactionDetails } from './types';
-export declare type ElectrumClientOptions = {
+export type ElectrumClientOptions = {
     requiredBlockConfirmations: number;
     websocketProxy?: {
         tcp: string | false;

@@ -1,6 +1,6 @@
 import type { Network } from 'bitcoinjs-lib/src/networks';
 import { Balance, PlainBlockHeader, PlainTransaction, Receipt, PeerFeatures, Peer } from './types';
-export declare type ElectrumApiOptions = {
+export type ElectrumApiOptions = {
     endpoint?: string;
     network: Network;
     proxy?: boolean;

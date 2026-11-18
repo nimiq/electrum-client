@@ -1,5 +1,5 @@
 import { Observable } from './Observable';
-export declare type ElectrumWSOptions = {
+export type ElectrumWSOptions = {
     proxy: boolean;
     token?: string;
     reconnect: boolean;

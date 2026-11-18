@@ -1,9 +1,8 @@
 import { fromOutputScript as addressFromOutputScript } from 'bitcoinjs-lib/src/address';
 import { Block } from 'bitcoinjs-lib/src/block';
-import { p2pkh, p2sh, p2wpkh, p2wsh, p2ms } from 'bitcoinjs-lib/src/payments';
+import { p2pkh, p2sh, p2wpkh, p2wsh, p2ms } from 'bitcoinjs-lib/src/payments/index';
 import { decompile as scriptDecompile, OPS } from 'bitcoinjs-lib/src/script';
 import { Transaction } from 'bitcoinjs-lib/src/transaction';
-import { Buffer } from 'buffer';
 import { bytesToHex, hexToBytes } from '../electrum-ws';
 export function blockHeaderToPlain(header, height) {
     if (typeof header === 'string')
@@ -71,7 +70,7 @@ export function outputToPlain(output, index, network) {
     return {
         script: bytesToHex(output.script),
         address,
-        value: output.value,
+        value: Number(output.value),
         index,
     };
 }
@@ -194,16 +193,16 @@ export function transactionFromPlain(plain) {
 }
 export function inputFromPlain(plain) {
     return {
-        hash: Buffer.from(hexToBytes(plain.transactionHash).reverse()),
+        hash: hexToBytes(plain.transactionHash).reverse(),
         index: plain.outputIndex,
-        script: Buffer.from(hexToBytes(plain.script)),
+        script: hexToBytes(plain.script),
         sequence: plain.sequence,
-        witness: plain.witness.map(scriptOrNumber => typeof scriptOrNumber === 'string' ? Buffer.from(hexToBytes(scriptOrNumber)) : scriptOrNumber),
+        witness: plain.witness.map(scriptOrNumber => typeof scriptOrNumber === 'string' ? hexToBytes(scriptOrNumber) : scriptOrNumber),
     };
 }
 export function outputFromPlain(plain) {
     return {
-        script: Buffer.from(hexToBytes(plain.script)),
-        value: plain.value,
+        script: hexToBytes(plain.script),
+        value: BigInt(plain.value),
     };
 }
